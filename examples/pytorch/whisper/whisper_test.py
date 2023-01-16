@@ -3,7 +3,8 @@ import os
 import sys
 ROOT_DIR = os.path.abspath("../../../")
 sys.path.append(ROOT_DIR)
-lib_path = os.path.join(ROOT_DIR, './build/lib/libth_whisper.so')
+lib_path = os.path.join(ROOT_DIR, 'build/lib/libth_whisper.so')
+# lib_path = os.path.join(ROOT_DIR, 'build/lib/libth_bart.so')
 
 # disable warning in notebook
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -24,11 +25,11 @@ from utils.dataset import LibriSpeech
 import whisper
 
 # %% [markdown]
-# ## Setup HuggingFace BART/MBART Model
+# ## Setup HuggingFace Whisper/MWhisper Model
 
 # %%
 # specify model name or checkpoint path
-# model_name = 'facebook/bart-base' # BART
+# model_name = 'facebook/Whisper-base' # Whisper
 device = torch.device("cuda")
 whisper_name = "large-v2"
 processor = WhisperProcessor.from_pretrained(f"openai/whisper-{whisper_name}")
@@ -63,7 +64,7 @@ print(generated_ids.shape)
 
 
 # %% [markdown]
-# ## Setup FT BART Model
+# ## Setup FT Whisper Model
 
 # %% [markdown]
 # ### FT parameters

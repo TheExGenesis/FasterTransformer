@@ -70,7 +70,7 @@ void BartDecoding<T>::allocateBuffer(
     // use max_seq_len + 1, but not max_seq_len.
     // This only affects the buffer size, not affect the performance.
 
-    const size_t batchxbeam      = batch_size * beam_width;
+    const size_t batchxbeam = batch_size * beam_width;
     const size_t self_cache_size = (num_layer_ / pipeline_para_.world_size_) * batchxbeam * (max_seq_len + 1)
                                    * (hidden_units_ / tensor_para_.world_size_);
     const size_t mem_cache_size = (num_layer_ / pipeline_para_.world_size_) * batchxbeam * max_mem_seq_len
@@ -88,21 +88,21 @@ void BartDecoding<T>::allocateBuffer(
     relative_attention_bias_ = (T*)(allocator_->reMalloc(
         relative_attention_bias_, sizeof(T) * head_num_ * (max_seq_len + 1) * (max_seq_len + 1), false));
 
-    decoder_input_buf_  = (T*)(allocator_->reMalloc(decoder_input_buf_, sizeof(T) * batchxbeam * d_model_, false));
+    decoder_input_buf_ = (T*)(allocator_->reMalloc(decoder_input_buf_, sizeof(T) * batchxbeam * d_model_, false));
     decoder_output_buf_ = (T*)(allocator_->reMalloc(decoder_output_buf_, sizeof(T) * batchxbeam * d_model_, false));
     normed_decoder_output_buf_ =
         (T*)(allocator_->reMalloc(normed_decoder_output_buf_, sizeof(T) * batchxbeam * d_model_, false));
-    logits_buf_      = (DynamicDecodeType*)(allocator_->reMalloc(
+    logits_buf_ = (DynamicDecodeType*)(allocator_->reMalloc(
         logits_buf_, sizeof(DynamicDecodeType) * batchxbeam * vocab_size_padded_, false));
     nccl_logits_buf_ = (DynamicDecodeType*)(allocator_->reMalloc(
         nccl_logits_buf_, sizeof(DynamicDecodeType) * batchxbeam * vocab_size_padded_, false));
-    cum_log_probs_   = (float*)(allocator_->reMalloc(cum_log_probs_, sizeof(float) * batchxbeam, false));
-    finished_buf_    = (bool*)(allocator_->reMalloc(finished_buf_, sizeof(bool) * batchxbeam, false));
-    h_finished_buf_  = (bool*)realloc(h_finished_buf_, sizeof(bool) * batchxbeam);
+    cum_log_probs_ = (float*)(allocator_->reMalloc(cum_log_probs_, sizeof(float) * batchxbeam, false));
+    finished_buf_ = (bool*)(allocator_->reMalloc(finished_buf_, sizeof(bool) * batchxbeam, false));
+    h_finished_buf_ = (bool*)realloc(h_finished_buf_, sizeof(bool) * batchxbeam);
 
     key_cache_ = (T*)(allocator_->reMalloc(key_cache_, sizeof(T) * (2 * self_cache_size + 2 * mem_cache_size), false));
-    value_cache_     = key_cache_ + self_cache_size;
-    key_mem_cache_   = value_cache_ + self_cache_size;
+    value_cache_ = key_cache_ + self_cache_size;
+    key_mem_cache_ = value_cache_ + self_cache_size;
     value_mem_cache_ = key_mem_cache_ + mem_cache_size;
     if (beam_width > 1) {
         cache_indirections_[0] = (int*)(allocator_->reMalloc(
@@ -115,7 +115,7 @@ void BartDecoding<T>::allocateBuffer(
         (int*)(allocator_->reMalloc(tiled_encoder_sequence_length_, sizeof(int) * batchxbeam, false));
 
     start_ids_buf_ = (int*)(allocator_->reMalloc(start_ids_buf_, sizeof(int) * batch_size, false));
-    end_ids_buf_   = (int*)(allocator_->reMalloc(end_ids_buf_, sizeof(int) * batch_size, false));
+    end_ids_buf_ = (int*)(allocator_->reMalloc(end_ids_buf_, sizeof(int) * batch_size, false));
 
     output_ids_buf_ =
         (int*)(allocator_->reMalloc(output_ids_buf_, sizeof(int) * batchxbeam * (max_seq_len + 1), false));
@@ -144,7 +144,7 @@ void BartDecoding<T>::allocateBuffer(
         beam_hyps_.min_normed_scores =
             (float*)allocator_->reMalloc(beam_hyps_.min_normed_scores, sizeof(float) * batch_size, true);
         beam_hyps_.num_beams = (int*)allocator_->reMalloc(beam_hyps_.num_beams, sizeof(int) * batch_size, true);
-        beam_hyps_.is_done   = (bool*)allocator_->reMalloc(beam_hyps_.is_done, sizeof(bool) * batch_size, true);
+        beam_hyps_.is_done = (bool*)allocator_->reMalloc(beam_hyps_.is_done, sizeof(bool) * batch_size, true);
     }
     is_allocate_buffer_ = true;
 }
@@ -212,39 +212,39 @@ void BartDecoding<T>::setStream(cudaStream_t stream)
 }
 
 template<typename T>
-BartDecoding<T>::BartDecoding(size_t                              max_batch_size,
-                              size_t                              max_seq_len,
-                              size_t                              mem_max_seq_len,
-                              size_t                              beam_width,
-                              size_t                              head_num,
-                              size_t                              size_per_head,
-                              size_t                              inter_size,
-                              size_t                              d_model,
-                              size_t                              num_layer,
-                              size_t                              vocab_size,
-                              size_t                              num_bucket,
-                              size_t                              max_distance,
-                              float                               q_scaling,
-                              int                                 start_id,
-                              int                                 end_id,
-                              float                               beam_search_diversity_rate,
-                              size_t                              top_k,
-                              float                               top_p,
-                              float                               temperature,
-                              float                               len_penalty,
-                              float                               repetition_penalty,
-                              cudaStream_t                        stream,
-                              cublasMMWrapper*                    cublas_wrapper,
-                              IAllocator*                         allocator,
-                              bool                                is_free_buffer_after_forward,
-                              cudaDeviceProp*                     cuda_device_prop,
-                              NcclParam                           tensor_para,
-                              NcclParam                           pipeline_para,
-                              ActivationType                      activation_type,
-                              LayerNormType                       layernorm_type,
-                              bool                                tie_word_embeddings,
+BartDecoding<T>::BartDecoding(size_t max_batch_size,
+                              size_t max_seq_len,
+                              size_t mem_max_seq_len,
+                              size_t beam_width,
+                              size_t head_num,
+                              size_t size_per_head,
+                              size_t inter_size,
+                              size_t d_model,
+                              size_t num_layer,
+                              size_t vocab_size,
+                              size_t num_bucket,
+                              size_t max_distance,
+                              float q_scaling,
+                              int start_id,
+                              int end_id,
+                              float beam_search_diversity_rate,
+                              size_t top_k,
+                              float top_p,
+                              float temperature,
+                              float len_penalty,
+                              float repetition_penalty,
+                              cudaStream_t stream,
+                              cublasMMWrapper* cublas_wrapper,
+                              IAllocator* allocator,
+                              bool is_free_buffer_after_forward,
+                              cudaDeviceProp* cuda_device_prop,
+                              NcclParam tensor_para,
+                              NcclParam pipeline_para,
+                              ActivationType activation_type,
+                              LayerNormType layernorm_type,
+                              bool tie_word_embeddings,
                               std::shared_ptr<AbstractCustomComm> custom_all_reduce_comm,
-                              int                                 enable_custom_all_reduce):
+                              int enable_custom_all_reduce):
     BaseLayer(stream, cublas_wrapper, allocator, is_free_buffer_after_forward, cuda_device_prop),
     head_num_(head_num),
     size_per_head_(size_per_head),
@@ -322,8 +322,8 @@ BartDecoding<T>::~BartDecoding()
 }
 
 template<typename T>
-void BartDecoding<T>::forward(TensorMap*                   output_tensors,
-                              TensorMap*                   input_tensors,
+void BartDecoding<T>::forward(TensorMap* output_tensors,
+                              TensorMap* input_tensors,
                               const BartDecodingWeight<T>* decoding_weights)
 {
     // input_tensors:
@@ -360,9 +360,9 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
     FT_CHECK(input_tensors->size() >= 2);
     FT_CHECK(output_tensors->size() >= 2);
     FT_CHECK(input_tensors->at("encoder_output").shape.size() == 3);
-    const size_t batch_size      = output_tensors->at("output_ids").shape[0];
-    const size_t beam_width      = output_tensors->at("output_ids").shape[1];
-    const size_t max_seq_len     = output_tensors->at("output_ids").shape[2];
+    const size_t batch_size = output_tensors->at("output_ids").shape[0];
+    const size_t beam_width = output_tensors->at("output_ids").shape[1];
+    const size_t max_seq_len = output_tensors->at("output_ids").shape[2];
     const size_t mem_max_seq_len = input_tensors->at("encoder_output").shape[1];
     allocateBuffer(batch_size, beam_width, max_seq_len, mem_max_seq_len, input_tensors->at("encoder_output").shape[2]);
 
@@ -379,9 +379,9 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
                               input_tensors->at("encoder_output").shape[2],
                               d_model_));
 
-    const int      max_input_length = 1;
-    const DataType data_type        = getTensorType<T>();
-    int*           sequence_lengths = output_tensors->at("sequence_length").getPtr<int>();
+    const int max_input_length = 1;
+    const DataType data_type = getTensorType<T>();
+    int* sequence_lengths = output_tensors->at("sequence_length").getPtr<int>();
 
     cudaMemsetAsync(
         output_tensors->at("output_ids").getPtr<int>(), 0, output_tensors->at("output_ids").sizeBytes(), stream_);
@@ -403,11 +403,11 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
                                  d_model_,
                                  stream_);
         sync_check_cuda_error();
-        encoder_output_ptr_          = tiled_encoder_output_;
+        encoder_output_ptr_ = tiled_encoder_output_;
         encoder_sequence_length_ptr_ = tiled_encoder_sequence_length_;
     }
     else {
-        encoder_output_ptr_          = input_tensors->at("encoder_output").getPtr<const T>();
+        encoder_output_ptr_ = input_tensors->at("encoder_output").getPtr<const T>();
         encoder_sequence_length_ptr_ = input_tensors->at("encoder_sequence_length").getPtr<const int>();
     }
 
@@ -434,7 +434,7 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
     sync_check_cuda_error();
 
     if (vocab_size_ == vocab_size_padded_) {
-        padded_embedding_kernel_ptr_            = decoding_weights->post_decoder_embedding.kernel;
+        padded_embedding_kernel_ptr_ = decoding_weights->post_decoder_embedding.kernel;
         padded_post_decoder_embedding_bias_ptr_ = decoding_weights->post_decoder_embedding.bias;
     }
     else {
@@ -464,10 +464,10 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
                                                     head_num_ / tensor_para_.world_size_,
                                                     (size_t)(max_seq_len + 1),
                                                     size_per_head_};
-    const std::vector<size_t> mem_cache_shape    = {num_layer_ / pipeline_para_.world_size_,
-                                                    batch_size * beam_width,
-                                                    mem_max_seq_len,
-                                                    head_num_ / tensor_para_.world_size_ * size_per_head_};
+    const std::vector<size_t> mem_cache_shape = {num_layer_ / pipeline_para_.world_size_,
+                                                 batch_size * beam_width,
+                                                 mem_max_seq_len,
+                                                 head_num_ / tensor_para_.world_size_ * size_per_head_};
 
     const size_t local_batch_size = getLocalBatchSize(batch_size, 1, pipeline_para_.world_size_);
     FT_CHECK(batch_size % local_batch_size == 0);
@@ -478,8 +478,8 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
         const int tgt_indir_idx = 1 - src_indir_idx;
 
         for (uint ite = 0; ite < iteration_num; ++ite) {
-            const int id_offset               = ite * local_batch_size * beam_width;
-            const int d_model_offset          = id_offset * d_model_;
+            const int id_offset = ite * local_batch_size * beam_width;
+            const int d_model_offset = id_offset * d_model_;
             const int vocab_size_units_offset = id_offset * vocab_size_padded_;
 
             if (pipeline_para_.rank_ == 0) {
@@ -566,7 +566,7 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
                 &decoder_output_tensors, &decoder_input_tensors, &decoding_weights->decoder_layer_weights);
 
             bool bart_with_bias = decoding_weights->bart_with_bias;
-            bool mbart          = decoding_weights->mbart;
+            bool mbart = decoding_weights->mbart;
 
             const cudaDataType_t gemm_data_type = getCudaDataType<T>();
 
@@ -591,7 +591,7 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
                 // bf16 logits computation fallback to fp32
                 if (tensor_para_.world_size_ == 1) {
                     float alpha = (!bart_with_bias && tie_word_embeddings_) ? 1.0f / sqrt(d_model_) : 1.0f;
-                    float beta  = 0.0f;
+                    float beta = 0.0f;
 #ifdef ENABLE_BF16
                     if (std::is_same<T, __nv_bfloat16>::value) {
                         logits_data_type = TYPE_FP32;
@@ -635,8 +635,8 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
                 }
                 else {
                     const int local_vocab_size = vocab_size_padded_ / tensor_para_.world_size_;
-                    float     alpha = (!bart_with_bias && tie_word_embeddings_) ? 1.0f / sqrt(d_model_) : 1.0f;
-                    float     beta  = 0.0f;
+                    float alpha = (!bart_with_bias && tie_word_embeddings_) ? 1.0f / sqrt(d_model_) : 1.0f;
+                    float beta = 0.0f;
 #ifdef ENABLE_BF16
                     if (std::is_same<T, __nv_bfloat16>::value) {
                         logits_data_type = TYPE_FP32;
@@ -711,8 +711,8 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
                         stream_);
                 }
 
-                int       tmp_local_batch_size       = local_batch_size;
-                bool      is_initialize_random_table = step == 1;
+                int tmp_local_batch_size = local_batch_size;
+                bool is_initialize_random_table = step == 1;
                 TensorMap dynamic_decode_input_tensors(
                     {{"logits",
                       Tensor{MEMORY_GPU, logits_data_type, {batch_size, beam_width, vocab_size_padded_}, logits_buf_}},
@@ -826,11 +826,11 @@ void BartDecoding<T>::forward(TensorMap*                   output_tensors,
         if (beam_width > 1) {
             if (using_beam_hyps) {
                 beam_hyps_.sequence_lengths_src = sequence_lengths;
-                beam_hyps_.parent_ids_src       = parent_ids_buf_;
-                beam_hyps_.output_ids_src       = output_ids_buf_;
-                beam_hyps_.log_probs_src        = output_log_probs_buf_;
-                beam_hyps_.max_seq_len          = max_seq_len;
-                beam_hyps_.length_penalty       = input_tensors->at("len_penalty").getVal<float>();
+                beam_hyps_.parent_ids_src = parent_ids_buf_;
+                beam_hyps_.output_ids_src = output_ids_buf_;
+                beam_hyps_.log_probs_src = output_log_probs_buf_;
+                beam_hyps_.max_seq_len = max_seq_len;
+                beam_hyps_.length_penalty = input_tensors->at("len_penalty").getVal<float>();
 
                 invokeInsertUnfinishedPath(beam_hyps_, finished_buf_, cum_log_probs_, batch_size, beam_width, stream_);
                 sync_check_cuda_error();

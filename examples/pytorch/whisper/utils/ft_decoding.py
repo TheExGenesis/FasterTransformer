@@ -280,7 +280,7 @@ class FTWhisperDecodingWeight(object):
 class FTWhisperDecoding(nn.Module):
     def __init__(self, decoding_weight_list, lib_path, head_num, head_size, inter_size,
                  mem_d_model, d_model, num_layer, start_id, end_id, vocab_size, q_scaling=1.0, num_bucket=32,
-                 max_distance=128, tensor_para_size=1, pipeline_para_size=1, whisper_with_bias=True, mwhisper=False, position_embedding_type=1,
+                 max_distance=128, tensor_para_size=1, pipeline_para_size=1, whisper_with_bias=True, mwhisper=True, position_embedding_type=1,
                  activation_type="gelu", layernorm_type="post_layernorm"):
         super().__init__()
 
@@ -299,11 +299,13 @@ class FTWhisperDecoding(nn.Module):
         torch.classes.load_library(lib_path)
         try:
             self.decoding = torch.classes.FasterTransformer.WhisperDecoding(head_num, head_size, inter_size, mem_d_model, d_model, num_layer,
+            # self.decoding = torch.classes.FasterTransformer.BartDecoding(head_num, head_size, inter_size, mem_d_model, d_model, num_layer,
                                                                        vocab_size, num_bucket, max_distance, q_scaling, start_id, end_id,
                                                                        tensor_para_size, pipeline_para_size, whisper_with_bias, mwhisper,
                                                                        position_embedding_type, activation_type, layernorm_type, *decoding_weight_list)
         except:
             self.decoding = torch.classes.FasterTransformerWhisperDecoding(head_num, head_size, inter_size, mem_d_model, d_model, num_layer,
+            # self.decoding = torch.classes.FasterTransformerBartDecoding(head_num, head_size, inter_size, mem_d_model, d_model, num_layer,
                                                                        vocab_size, num_bucket, max_distance, q_scaling, start_id, end_id,
                                                                        tensor_para_size, pipeline_para_size, whisper_with_bias, mwhisper,
                                                                        position_embedding_type, activation_type, layernorm_type, *decoding_weight_list)
@@ -359,13 +361,13 @@ class FTWhisper(nn.Module):
                                         mem_seq_len,
                                         )
         return_dict = {}
-        return_dict['output_ids'] = results.pop(0).reshape([-1, beam_size, max_seq_len]).cpu().numpy()
-        return_dict['sequence_lengths'] = results.pop(0).reshape([-1, beam_size]).cpu().numpy()
+        return_dict['output_ids'] = results.pop(0).reshape([-1, beam_size, max_seq_len]).cpu()
+        return_dict['sequence_lengths'] = results.pop(0).reshape([-1, beam_size]).cpu()
         if is_return_output_log_probs:
-            return_dict['output_log_probs'] = results.pop(0).cpu().numpy()
+            return_dict['output_log_probs'] = results.pop(0).cpu()
         if is_return_cum_log_probs:
-            return_dict['cum_log_probs'] = results.pop(0).cpu().numpy()
+            return_dict['cum_log_probs'] = results.pop(0).cpu()
         if is_return_cross_attentions:
-            return_dict['cross_attentions'] = results.pop(0).cpu().numpy()
+            return_dict['cross_attentions'] = results.pop(0).cpu()
             
         return return_dict
