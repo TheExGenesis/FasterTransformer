@@ -19,9 +19,9 @@
 namespace fastertransformer {
 
 template<typename T>
-void TensorParallelGeluFfnLayer<T>::forward(std::vector<fastertransformer::Tensor>*       output_tensors,
+void TensorParallelGeluFfnLayer<T>::forward(std::vector<fastertransformer::Tensor>* output_tensors,
                                             const std::vector<fastertransformer::Tensor>* input_tensors,
-                                            const FfnWeight<T>*                           ffn_weights)
+                                            const FfnWeight<T>* ffn_weights)
 {
     TensorMap input_tensor({{"ffn_input", input_tensors->at(0)}});
     TensorMap output_tensor({{"ffn_output", output_tensors->at(0)}});
@@ -29,13 +29,13 @@ void TensorParallelGeluFfnLayer<T>::forward(std::vector<fastertransformer::Tenso
 }
 
 template<typename T>
-void TensorParallelGeluFfnLayer<T>::forward(TensorMap*          output_tensors,
-                                            TensorMap*          input_tensors,
+void TensorParallelGeluFfnLayer<T>::forward(TensorMap* output_tensors,
+                                            TensorMap* input_tensors,
                                             const FfnWeight<T>* ffn_weights)
 {
     FT_LOG_DEBUG("%s start", __PRETTY_FUNCTION__);
-    Tensor       out_tensor   = output_tensors->at("ffn_output");
-    const size_t token_num    = out_tensor.shape[0];
+    Tensor out_tensor = output_tensors->at("ffn_output");
+    const size_t token_num = out_tensor.shape[0];
     const size_t hidden_units = out_tensor.shape[1];
 
     std::vector<Tensor> swap_tensors = {out_tensor};
@@ -87,23 +87,23 @@ void TensorParallelGeluFfnLayer<T>::forward(TensorMap*          output_tensors,
 }
 
 template<typename T>
-TensorParallelGeluFfnLayer<T>::TensorParallelGeluFfnLayer(size_t           max_batch_size,
-                                                          size_t           max_seq_len,
-                                                          size_t           head_num,
-                                                          size_t           size_per_head,
-                                                          size_t           expert_num,
-                                                          size_t           inter_size,
-                                                          NcclParam        tensor_para,
-                                                          cudaStream_t     stream,
+TensorParallelGeluFfnLayer<T>::TensorParallelGeluFfnLayer(size_t max_batch_size,
+                                                          size_t max_seq_len,
+                                                          size_t head_num,
+                                                          size_t size_per_head,
+                                                          size_t expert_num,
+                                                          size_t inter_size,
+                                                          NcclParam tensor_para,
+                                                          cudaStream_t stream,
                                                           cublasMMWrapper* cublas_wrapper,
-                                                          IAllocator*      allocator,
-                                                          bool             do_all_reduce,
-                                                          bool             is_free_buffer_after_forward,
-                                                          bool             is_sparse,
-                                                          int              int8_mode,
-                                                          bool             use_gated_activation,
+                                                          IAllocator* allocator,
+                                                          bool do_all_reduce,
+                                                          bool is_free_buffer_after_forward,
+                                                          bool is_sparse,
+                                                          int int8_mode,
+                                                          bool use_gated_activation,
                                                           std::shared_ptr<AbstractCustomComm> custom_all_reduce_comm,
-                                                          int                                 enable_custom_all_reduce):
+                                                          int enable_custom_all_reduce):
     GeluFfnLayer<T>(max_batch_size,
                     max_seq_len,
                     head_num,
@@ -139,7 +139,9 @@ TensorParallelGeluFfnLayer<T>::TensorParallelGeluFfnLayer(TensorParallelGeluFfnL
 template<typename T>
 TensorParallelGeluFfnLayer<T>::~TensorParallelGeluFfnLayer()
 {
-    GeluFfnLayer<T>::allocator_->free((void**)&ffn_output_fp_);
+    if (ffn_output_fp_) {
+        GeluFfnLayer<T>::allocator_->free((void**)&ffn_output_fp_);
+    }
 }
 
 template class TensorParallelGeluFfnLayer<float>;
