@@ -134,7 +134,9 @@ class FTWhisperEncoderWeight(object):
         t = t * embedding_scale
         self.w.append(t)
         # [11] LayerNorm after embedding & before transformer block, special in BART/mBART
-        t = encoder_weight_dict["encoder.layernorm_embedding.weight"].contiguous().cuda()
+        # t = encoder_weight_dict["encoder.layernorm_embedding.weight"].contiguous().cuda()
+        t = torch.ones((model.config.d_model), dtype=torch_weight_dtype, device=model.device)
+        self.w.append(t)
         self.w.append(t)
         # [12] LayerNorm after transformer block, special in mBART
         if self.mwhisper:
@@ -154,7 +156,7 @@ class FTWhisperEncoderWeight(object):
             t = t.split(t.shape[-1] // self.tensor_para_size, dim=-1)[self.tensor_para_rank].contiguous()
             self.w.append(t)
             # [15]
-            t = torch.stack([encoder_weight_dict["encoder.layers.{}.self_attn.k_proj.bias".format(i)]
+            t = torch.stack([torch.zeros((model.config.d_model), dtype=torch_weight_dtype, device=model.device)
                             for i in range(start_layer, end_layer)], 0).contiguous().cuda()
             t = t.split(t.shape[-1] // self.tensor_para_size, dim=-1)[self.tensor_para_rank].contiguous()
             self.w.append(t)
@@ -183,7 +185,8 @@ class FTWhisperEncoderWeight(object):
                             for i in range(start_layer, end_layer)], 0).contiguous().cuda()
             self.w.append(t)
             # [22]
-            t = encoder_weight_dict["encoder.layernorm_embedding.bias"].contiguous().cuda()
+            # t = encoder_weight_dict["encoder.layernorm_embedding.bias"].contiguous().cuda()
+            t = torch.zeros((model.config.d_model), dtype=torch_weight_dtype, device=model.device)
             self.w.append(t)
             # [23] LayerNorm after transformer block, special in mBART
             if self.mwhisper:
