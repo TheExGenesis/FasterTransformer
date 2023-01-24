@@ -122,29 +122,29 @@ void WhisperEncoder<T>::initialize()
 }
 
 template<typename T>
-WhisperEncoder<T>::WhisperEncoder(size_t                              max_batch_size,
-                            size_t                              max_seq_len,
-                            size_t                              head_num,
-                            size_t                              size_per_head,
-                            size_t                              inter_size,
-                            size_t                              d_model,
-                            size_t                              num_layer,
-                            size_t                              num_bucket_or_max_seq_len,
-                            size_t                              max_distance,
-                            int                                 sm,
-                            float                               q_scaling,
-                            cudaStream_t                        stream,
-                            cublasMMWrapper*                    cublas_wrapper,
-                            IAllocator*                         allocator,
-                            bool                                is_free_buffer_after_forward,
-                            AttentionType                       attention_type,
-                            bool                                sparse,
-                            ActivationType                      activation_type,
-                            LayerNormType                       layernorm_type,
-                            NcclParam                           tensor_para,
-                            NcclParam                           pipeline_para,
-                            std::shared_ptr<AbstractCustomComm> custom_all_reduce_comm,
-                            int                                 enable_custom_all_reduce):
+WhisperEncoder<T>::WhisperEncoder(size_t max_batch_size,
+                                  size_t max_seq_len,
+                                  size_t head_num,
+                                  size_t size_per_head,
+                                  size_t inter_size,
+                                  size_t d_model,
+                                  size_t num_layer,
+                                  size_t num_bucket_or_max_seq_len,
+                                  size_t max_distance,
+                                  int sm,
+                                  float q_scaling,
+                                  cudaStream_t stream,
+                                  cublasMMWrapper* cublas_wrapper,
+                                  IAllocator* allocator,
+                                  bool is_free_buffer_after_forward,
+                                  AttentionType attention_type,
+                                  bool sparse,
+                                  ActivationType activation_type,
+                                  LayerNormType layernorm_type,
+                                  NcclParam tensor_para,
+                                  NcclParam pipeline_para,
+                                  std::shared_ptr<AbstractCustomComm> custom_all_reduce_comm,
+                                  int enable_custom_all_reduce):
     BaseLayer(stream, cublas_wrapper, allocator, is_free_buffer_after_forward),
     max_batch_size_(max_batch_size),
     max_seq_len_(max_seq_len),
@@ -239,7 +239,7 @@ void WhisperEncoder<T>::allocateBuffer()
             whisper_encoder_out_buffer_, sizeof(T) * max_batch_size_ * max_seq_len_ * d_model_, false);
 
         if (layernorm_type_ == LayerNormType::post_layernorm) {
-            normed_from_tensor_  = nullptr;
+            normed_from_tensor_ = nullptr;
             normed_attn_out_buf_ = nullptr;
         }
         else {
@@ -256,7 +256,7 @@ template<typename T>
 void WhisperEncoder<T>::allocateBuffer(size_t batch_size, size_t seq_len)
 {
     FT_LOG_DEBUG(__PRETTY_FUNCTION__);
-    token_num_      = (size_t*)allocator_->reMalloc(token_num_, sizeof(size_t) * 1, false);
+    token_num_ = (size_t*)allocator_->reMalloc(token_num_, sizeof(size_t) * 1, false);
     padding_offset_ = (int*)allocator_->reMalloc(padding_offset_, sizeof(int) * batch_size * seq_len, false);
     trt_mha_padding_offset_ =
         (int*)allocator_->reMalloc(trt_mha_padding_offset_, sizeof(int) * (2 * batch_size + 1), false);
@@ -274,7 +274,7 @@ void WhisperEncoder<T>::allocateBuffer(size_t batch_size, size_t seq_len)
         (T*)allocator_->reMalloc(whisper_encoder_out_buffer_, sizeof(T) * batch_size * seq_len * d_model_, false);
 
     if (layernorm_type_ == LayerNormType::post_layernorm) {
-        normed_from_tensor_  = nullptr;
+        normed_from_tensor_ = nullptr;
         normed_attn_out_buf_ = nullptr;
     }
     else {
@@ -302,7 +302,7 @@ void WhisperEncoder<T>::freeBuffer()
         allocator_->free((void**)(&whisper_encoder_out_buffer_));
 
         if (layernorm_type_ == LayerNormType::post_layernorm) {
-            normed_from_tensor_  = nullptr;
+            normed_from_tensor_ = nullptr;
             normed_attn_out_buf_ = nullptr;
         }
         else {
@@ -343,9 +343,9 @@ int WhisperEncoder<T>::getFirstLayerParallelId()
 }
 
 template<typename T>
-void WhisperEncoder<T>::forward(TensorMap*                  output_tensors,
-                             TensorMap*                  input_tensors,
-                             const WhisperEncoderWeight<T>* whisper_encoder_weights)
+void WhisperEncoder<T>::forward(TensorMap* output_tensors,
+                                TensorMap* input_tensors,
+                                const WhisperEncoderWeight<T>* whisper_encoder_weights)
 {
     // input_tensors:
     //      input_ids [batch, seqlen]
@@ -367,10 +367,10 @@ void WhisperEncoder<T>::forward(TensorMap*                  output_tensors,
     else {
         FT_CHECK(input_tensors->at("input_ids").shape.size() == 2);
     }
-    std::string  input_tensor_name  = use_inputs_embeds ? "inputs_embeds" : "input_ids";
+    std::string input_tensor_name = use_inputs_embeds ? "inputs_embeds" : "input_ids";
     const size_t request_batch_size = input_tensors->at(input_tensor_name).shape[0];
-    const size_t request_seq_len    = input_tensors->at(input_tensor_name).shape[1];
-    const bool   return_attentions  = output_tensors->at("output_attentions", {}).size();
+    const size_t request_seq_len = input_tensors->at(input_tensor_name).shape[1];
+    const bool return_attentions = output_tensors->at("output_attentions", {}).size();
     FT_CHECK(input_tensors->size() >= 2 && input_tensors->size() <= 3);
     FT_CHECK(request_batch_size == input_tensors->at("sequence_length").shape[0]);
     FT_CHECK(input_tensors->at("sequence_length").shape.size() == 1);
@@ -383,8 +383,8 @@ void WhisperEncoder<T>::forward(TensorMap*                  output_tensors,
     }
 
     // Whisper Structure Difference
-    const bool            whisper_with_bias          = whisper_encoder_weights->whisper_with_bias;
-    const bool            mwhisper                   = whisper_encoder_weights->mwhisper;
+    const bool whisper_with_bias = whisper_encoder_weights->whisper_with_bias;
+    const bool mwhisper = whisper_encoder_weights->mwhisper;
     PositionEmbeddingType position_embedding_type = whisper_encoder_weights->position_embedding_type;
 
     const bool use_inputs_embeds_buffer =
@@ -406,10 +406,10 @@ void WhisperEncoder<T>::forward(TensorMap*                  output_tensors,
                    sizeof(T) * request_batch_size * request_seq_len * d_model_);
     }
     const size_t local_batch_size = getLocalBatchSize(request_batch_size, request_seq_len, pipeline_para_.world_size_);
-    const size_t iteration_num    = request_batch_size / local_batch_size;
+    const size_t iteration_num = request_batch_size / local_batch_size;
 
     for (uint ite = 0; ite < iteration_num; ite++) {
-        size_t id_offset      = ite * local_batch_size;
+        size_t id_offset = ite * local_batch_size;
         size_t d_model_offset = id_offset * request_seq_len * d_model_;
 
         const int* sequence_lengths = input_tensors->at("sequence_length").getPtr<int>() + id_offset;
@@ -453,9 +453,9 @@ void WhisperEncoder<T>::forward(TensorMap*                  output_tensors,
 
         sync_check_cuda_error();
 
-        size_t  h_token_num;
-        T*      whisper_encoder_input_ptr;
-        T*      whisper_encoder_output_ptr;
+        size_t h_token_num;
+        T* whisper_encoder_input_ptr;
+        T* whisper_encoder_output_ptr;
         Tensor* padding_offset_tensor_ptr;
         // preprocess (remove padding and build mask)
         switch (attention_type_) {
@@ -484,7 +484,7 @@ void WhisperEncoder<T>::forward(TensorMap*                  output_tensors,
                                         stream_);
                     sync_check_cuda_error();
                 }
-                whisper_encoder_input_ptr  = whisper_encoder_in_buffer_;
+                whisper_encoder_input_ptr = whisper_encoder_in_buffer_;
                 whisper_encoder_output_ptr = whisper_encoder_out_buffer_;
 
                 padding_offset_tensor_ptr =
@@ -505,9 +505,9 @@ void WhisperEncoder<T>::forward(TensorMap*                  output_tensors,
                 }
 
                 sync_check_cuda_error();
-                h_token_num               = local_batch_size * request_seq_len;
-                whisper_encoder_input_ptr    = whisper_encoder_emb_buf_;
-                whisper_encoder_output_ptr   = output_tensors->at("output_hidden_state").getPtr<T>() + d_model_offset;
+                h_token_num = local_batch_size * request_seq_len;
+                whisper_encoder_input_ptr = whisper_encoder_emb_buf_;
+                whisper_encoder_output_ptr = output_tensors->at("output_hidden_state").getPtr<T>() + d_model_offset;
                 padding_offset_tensor_ptr = new Tensor(MEMORY_GPU, TYPE_INT32, std::vector<size_t>{0}, nullptr);
                 break;
             }
@@ -557,15 +557,15 @@ void WhisperEncoder<T>::forward(TensorMap*                  output_tensors,
 
         // Before layers, BART/mBART has a layernorm on the embeddings. Different from T5
         // should we put rank=0 condition here?
-        invokeGeneralT5LayerNorm(whisper_encoder_input_ptr,
-                                 whisper_encoder_input_ptr,
-                                 whisper_encoder_weights->pre_transformer_layernorm_weights.gamma,
-                                 whisper_encoder_weights->pre_transformer_layernorm_weights.beta,
-                                 layernorm_eps_,
-                                 h_token_num,
-                                 d_model_,
-                                 stream_);
-        sync_check_cuda_error();
+        // invokeGeneralT5LayerNorm(whisper_encoder_input_ptr,
+        //                          whisper_encoder_input_ptr,
+        //                          whisper_encoder_weights->pre_transformer_layernorm_weights.gamma,
+        //                          whisper_encoder_weights->pre_transformer_layernorm_weights.beta,
+        //                          layernorm_eps_,
+        //                          h_token_num,
+        //                          d_model_,
+        //                          stream_);
+        // sync_check_cuda_error();
 
         // Encoder layers
         for (uint i = 0; i < num_layer_; i++) {
@@ -573,7 +573,7 @@ void WhisperEncoder<T>::forward(TensorMap*                  output_tensors,
                 continue;
             }
             T* from_tensor = (i == 0 ? whisper_encoder_input_ptr : whisper_encoder_output_ptr);
-            T* out_tensor  = whisper_encoder_output_ptr;
+            T* out_tensor = whisper_encoder_output_ptr;
 
             WhisperEncoderLayerWeight<T>* layer_weight = whisper_encoder_weights->whisper_encoder_layer_weights[i];
 
