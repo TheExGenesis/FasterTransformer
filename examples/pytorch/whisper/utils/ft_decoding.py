@@ -299,13 +299,11 @@ class FTWhisperDecoding(nn.Module):
         torch.classes.load_library(lib_path)
         try:
             self.decoding = torch.classes.FasterTransformer.WhisperDecoding(head_num, head_size, inter_size, mem_d_model, d_model, num_layer,
-            # self.decoding = torch.classes.FasterTransformer.BartDecoding(head_num, head_size, inter_size, mem_d_model, d_model, num_layer,
                                                                        vocab_size, num_bucket, max_distance, q_scaling, start_id, end_id,
                                                                        tensor_para_size, pipeline_para_size, whisper_with_bias, mwhisper,
                                                                        position_embedding_type, activation_type, layernorm_type, *decoding_weight_list)
         except:
             self.decoding = torch.classes.FasterTransformerWhisperDecoding(head_num, head_size, inter_size, mem_d_model, d_model, num_layer,
-            # self.decoding = torch.classes.FasterTransformerBartDecoding(head_num, head_size, inter_size, mem_d_model, d_model, num_layer,
                                                                        vocab_size, num_bucket, max_distance, q_scaling, start_id, end_id,
                                                                        tensor_para_size, pipeline_para_size, whisper_with_bias, mwhisper,
                                                                        position_embedding_type, activation_type, layernorm_type, *decoding_weight_list)
