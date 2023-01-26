@@ -177,7 +177,7 @@ class FTWhisperDecodingWeight(object):
         self.w.append(t)
         # [15] LayerNorm after embedding & before transformer block, special in BART/mBART
         # t = weight_dict["decoder.layernorm_embedding.weight"].contiguous().cuda()
-        t = torch.ones((model.config.d_model), dtype=torch_weight_dtype, device=model.device)
+        t = torch.empty((model.config.d_model), dtype=torch_weight_dtype, device=model.device)
         self.w.append(t)
         # [16] LayerNorm after transformer block, special in mBART
         if self.mwhisper:
@@ -241,7 +241,7 @@ class FTWhisperDecodingWeight(object):
             self.w.append(t)
             # [29]
             # t = weight_dict["decoder.layernorm_embedding.bias"].contiguous().cuda()
-            t = torch.zeros((model.config.d_model), dtype=torch_weight_dtype, device=model.device)
+            t = torch.empty((model.config.d_model), dtype=torch_weight_dtype, device=model.device)
             self.w.append(t)
             # [30]
             if self.mwhisper:

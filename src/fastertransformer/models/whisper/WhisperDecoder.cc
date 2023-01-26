@@ -180,24 +180,24 @@ bool WhisperDecoder<T>::isValidBatchSize(size_t batch_size)
 }
 
 template<typename T>
-WhisperDecoder<T>::WhisperDecoder(size_t                              max_batch_size,
-                            size_t                              head_num,
-                            size_t                              size_per_head,
-                            size_t                              inter_size,
-                            size_t                              d_model,
-                            size_t                              num_layer,
-                            float                               layernorm_eps,
-                            cudaStream_t                        stream,
-                            cublasMMWrapper*                    cublas_wrapper,
-                            IAllocator*                         allocator,
-                            bool                                is_free_buffer_after_forward,
-                            NcclParam                           tensor_para,
-                            NcclParam                           pipeline_para,
-                            ActivationType                      activation_type,
-                            LayerNormType                       layernorm_type,
-                            float                               q_scaling,
-                            std::shared_ptr<AbstractCustomComm> custom_all_reduce_comm,
-                            int                                 enable_custom_all_reduce):
+WhisperDecoder<T>::WhisperDecoder(size_t max_batch_size,
+                                  size_t head_num,
+                                  size_t size_per_head,
+                                  size_t inter_size,
+                                  size_t d_model,
+                                  size_t num_layer,
+                                  float layernorm_eps,
+                                  cudaStream_t stream,
+                                  cublasMMWrapper* cublas_wrapper,
+                                  IAllocator* allocator,
+                                  bool is_free_buffer_after_forward,
+                                  NcclParam tensor_para,
+                                  NcclParam pipeline_para,
+                                  ActivationType activation_type,
+                                  LayerNormType layernorm_type,
+                                  float q_scaling,
+                                  std::shared_ptr<AbstractCustomComm> custom_all_reduce_comm,
+                                  int enable_custom_all_reduce):
     BaseLayer(stream, cublas_wrapper, allocator, is_free_buffer_after_forward),
     max_batch_size_(max_batch_size),
     head_num_(head_num),
@@ -288,9 +288,9 @@ int WhisperDecoder<T>::getFirstLayerParallelId()
 }
 
 template<typename T>
-void WhisperDecoder<T>::forward(std::vector<Tensor>*                           output_tensors,
-                             const std::vector<Tensor>*                     input_tensors,
-                             const std::vector<WhisperDecoderLayerWeight<T>*>* decoder_layer_weight)
+void WhisperDecoder<T>::forward(std::vector<Tensor>* output_tensors,
+                                const std::vector<Tensor>* input_tensors,
+                                const std::vector<WhisperDecoderLayerWeight<T>*>* decoder_layer_weight)
 {
     // input tensors:
     //      decoder_input [local_batch_size, d_model_],
@@ -321,9 +321,9 @@ void WhisperDecoder<T>::forward(std::vector<Tensor>*                           o
     const size_t local_batch_size = input_tensors->at(0).shape[0];
     allocateBuffer(local_batch_size);
 
-    const size_t   mem_max_seq_len = input_tensors->at(1).shape[1];
-    const uint     ite             = input_tensors->at(7).getVal<uint>();
-    const DataType data_type       = getTensorType<T>();
+    const size_t mem_max_seq_len = input_tensors->at(1).shape[1];
+    const uint ite = input_tensors->at(7).getVal<uint>();
+    const DataType data_type = getTensorType<T>();
 
     std::vector<size_t> self_k_cache_shape;
     self_k_cache_shape.push_back(local_batch_size);
@@ -340,14 +340,14 @@ void WhisperDecoder<T>::forward(std::vector<Tensor>*                           o
         local_batch_size, output_tensors->at(3).shape[2], output_tensors->at(3).shape[3]};
 
     const bool output_cross_attention = output_tensors->size() == 6;
-    const uint max_seq_len            = output_cross_attention ? output_tensors->at(5).shape[4] : 0;
+    const uint max_seq_len = output_cross_attention ? output_tensors->at(5).shape[4] : 0;
 
     for (uint l = 0; l < num_layer_; l++) {
         if (isValidLayerParallelId(l) == false) {
             continue;
         }
 
-        T* decoder_input  = (l == 0) ? input_tensors->at(0).getPtr<T>() : decoder_layer_output_;
+        T* decoder_input = (l == 0) ? input_tensors->at(0).getPtr<T>() : decoder_layer_output_;
         T* decoder_output = (l == num_layer_ - 1) ? output_tensors->at(0).getPtr<T>() : decoder_layer_output_;
 
         if (isFirstLayerParallelId(l) == true && pipeline_para_.rank_ != 0 && pipeline_para_.world_size_ > 1) {
@@ -468,7 +468,7 @@ void WhisperDecoder<T>::forward(std::vector<Tensor>*                           o
             {"value_cache",
              Tensor{MEMORY_GPU, data_type, mem_cache_shape, output_tensors->at(4).getPtrWithOffset(mem_cache_offset)}}};
         if (output_cross_attention) {
-            int          local_layer_id          = l - getFirstLayerParallelId();
+            int local_layer_id = l - getFirstLayerParallelId();
             const size_t cross_attentions_offset = local_layer_id * output_tensors->at(5).offsets[1]
                                                    + output_tensors->at(5).offsets[0] * head_num_
                                                          / tensor_para_.world_size_ * max_seq_len * mem_max_seq_len;

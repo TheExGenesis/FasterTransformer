@@ -94,11 +94,7 @@ public:
         cublas_algo_map_ = new ft::cublasAlgoMap("gemm_config.in");
 
         cublas_wrapper_mutex_ = new std::mutex();
-        // decoder_layer_weights.clear();
-        // decoder_layer_weights.resize(_layer_num);
-        // TODO xiq debugging
         decoder_layer_weights.clear();
-
         decoder_layer_weights.reserve(_layer_num);
         for (int l = 0; l < _layer_num; l++) {
             decoder_layer_weights.push_back(new ft::WhisperDecoderLayerWeight<T>());
@@ -233,16 +229,6 @@ public:
                                                               _activation_type,
                                                               _layernorm_type);
 
-        // int tmp_step = step + 1;
-        // std::vector<ft::Tensor> input_tensors =
-        //     std::vector<ft::Tensor>{convert_tensor<T>(from_tensor),
-        //                             convert_tensor<T>(memory_tensor),
-        //                             convert_tensor<int>(memory_sequence_length),
-        //                             ft::Tensor{ft::MEMORY_GPU, ft::TYPE_BOOL, {batch_size}, nullptr},
-        //                             ft::Tensor{ft::MEMORY_CPU, ft::TYPE_INT32, {1}, &tmp_step},
-        //                             convert_tensor<int>(sequence_length),
-        //                             convert_tensor<T>(relative_attention_bias_tensor)};
-
         int tmp_step = step + 1;
         int beam_width = 1;
         int max_seq_len = step;
@@ -335,16 +321,18 @@ public:
                                                               _activation_type,
                                                               _layernorm_type);
 
-        // int tmp_step = step + 1;
-        // std::vector<ft::Tensor> input_tensors =
-        //     std::vector<ft::Tensor>{convert_tensor<T>(from_tensor),
-        //                             convert_tensor<T>(memory_tensor),
-        //                             convert_tensor<int>(memory_sequence_length),
-        //                             ft::Tensor{ft::MEMORY_GPU, ft::TYPE_BOOL, {batch_size}, nullptr},
-        //                             ft::Tensor{ft::MEMORY_CPU, ft::TYPE_INT32, {1}, &tmp_step},
-        //                             convert_tensor<int>(sequence_length),
-        //                             convert_tensor<T>(relative_attention_bias_tensor)};
-
+        // input tensors:
+        //      decoder_input [local_batch_size, d_model_],
+        //      encoder_output [local_batch_size, mem_max_seq_len, mem_d_model_],
+        //      encoder_sequence_length [local_batch_size],
+        //      finished [local_batch_size],
+        //      step [1] on cpu
+        //      sequence_lengths [local_batch_size]
+        //      relative_attention_bias [1, head_num, step, step] or [1, head_num, max_seq_len, max_seq_len]
+        //      ite [1] on cpu
+        //      cache_indirection [local_batch_size / beam_width, beam_width, max_seq_len]
+        //              Here, local_batch_size contains the beam_width, so local_batch_size / beam_width
+        //              is real local_batch_size.
         int tmp_step = step + 1;
         int beam_width = 1;
         int max_seq_len = step;
@@ -363,6 +351,16 @@ public:
                        ft::TYPE_INT32,
                        {batch_size, beam_width, max_seq_len + 1},
                        nullptr}};  // cache indirection
+
+        // output tensors:
+        //      decoder_output [local_batch_size, d_model_],
+        //      key_cache [num_layer / pipeline_para_.world_size_, batch, head_num, size_per_head // x, max_seq_len, x]
+        //      value_cache [num_layer / pipeline_para_.world_size_, batch, head_num, max_seq_len, size_per_head]
+        //      key_mem_cache [num_layer / pipeline_para_.world_size_, batch_size, mem_max_seq_len, hidden_dimension],
+        //      value_mem_cache [num_layer / pipeline_para_.world_size_, batch_size, mem_max_seq_len, hidden_dimension]
+        //      attention_output: shape = [num_layer / pipeline_para_.world_size_, batch_size, beam,
+        //          head_num / tensor_para_.world_size_, max_seq_len, mem_max_seq_len]
+        //          offset = [batch_offset, layer_offset_base] optional, float*
 
         std::vector<ft::Tensor> output_tensors = std::vector<ft::Tensor>{convert_tensor<T>(output_tensor),
                                                                          convert_tensor<T>(self_cache_keys_tensor),

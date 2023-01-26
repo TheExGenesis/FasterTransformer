@@ -40,20 +40,20 @@ private:
     // buffer handling
     size_t max_batch_size_ = 0;
     // meta data
-    const size_t         head_num_;
-    const size_t         size_per_head_;
-    const size_t         inter_size_;
-    const size_t         d_model_;
-    const size_t         num_layer_;
-    const size_t         hidden_units_;
+    const size_t head_num_;
+    const size_t size_per_head_;
+    const size_t inter_size_;
+    const size_t d_model_;
+    const size_t num_layer_;
+    const size_t hidden_units_;
     const ActivationType activation_type_;
-    const LayerNormType  layernorm_type_;  // still need to distinguish pre-/post- LayerNorm of
-    const float          layernorm_eps_;
-    float                q_scaling_;
+    const LayerNormType layernorm_type_;  // still need to distinguish pre-/post- LayerNorm of
+    const float layernorm_eps_;
+    float q_scaling_;
 
     BaseAttentionLayer<T>* self_attention_layer_;
     BaseAttentionLayer<T>* cross_attention_layer_;
-    FfnLayer<T>*           ffn_layer_;
+    FfnLayer<T>* ffn_layer_;
 
     void allocateBuffer() override;
     void freeBuffer() override;
@@ -66,47 +66,47 @@ private:
     NcclParam pipeline_para_;
 
     std::shared_ptr<AbstractCustomComm> custom_all_reduce_comm_;
-    int                                 enable_custom_all_reduce_;
+    int enable_custom_all_reduce_;
 
     bool isValidLayerParallelId(uint l);
     bool isFirstLayerParallelId(uint l);
     bool isLastLayerParallelId(uint l);
-    int  getFirstLayerParallelId();
+    int getFirstLayerParallelId();
 
 protected:
-    T* decoder_normed_input_     = nullptr;
-    T* self_attn_output_         = nullptr;
-    T* normed_self_attn_output_  = nullptr;
-    T* cross_attn_output_        = nullptr;
+    T* decoder_normed_input_ = nullptr;
+    T* self_attn_output_ = nullptr;
+    T* normed_self_attn_output_ = nullptr;
+    T* cross_attn_output_ = nullptr;
     T* normed_cross_attn_output_ = nullptr;
-    T* decoder_layer_output_     = nullptr;
+    T* decoder_layer_output_ = nullptr;
 
 public:
-    WhisperDecoder(size_t                              max_batch_size,
-                size_t                              head_num,
-                size_t                              size_per_head,
-                size_t                              inter_size,
-                size_t                              d_model,
-                size_t                              num_layer,
-                float                               layernorm_eps_,
-                cudaStream_t                        stream,
-                cublasMMWrapper*                    cublas_wrapper,
-                IAllocator*                         allocator,
-                bool                                is_free_buffer_after_forward,
-                NcclParam                           tensor_para,
-                NcclParam                           pipeline_para,
-                ActivationType                      activation_type,
-                LayerNormType                       layernorm_type,
-                float                               q_scaling                = 1.0f,
-                std::shared_ptr<AbstractCustomComm> custom_all_reduce_comm   = nullptr,
-                int                                 enable_custom_all_reduce = 0);
+    WhisperDecoder(size_t max_batch_size,
+                   size_t head_num,
+                   size_t size_per_head,
+                   size_t inter_size,
+                   size_t d_model,
+                   size_t num_layer,
+                   float layernorm_eps_,
+                   cudaStream_t stream,
+                   cublasMMWrapper* cublas_wrapper,
+                   IAllocator* allocator,
+                   bool is_free_buffer_after_forward,
+                   NcclParam tensor_para,
+                   NcclParam pipeline_para,
+                   ActivationType activation_type,
+                   LayerNormType layernorm_type,
+                   float q_scaling = 1.0f,
+                   std::shared_ptr<AbstractCustomComm> custom_all_reduce_comm = nullptr,
+                   int enable_custom_all_reduce = 0);
 
     WhisperDecoder(WhisperDecoder<T> const& decoder);
 
     ~WhisperDecoder();
 
-    void forward(std::vector<Tensor>*                           output_tensors,
-                 const std::vector<Tensor>*                     input_tensors,
+    void forward(std::vector<Tensor>* output_tensors,
+                 const std::vector<Tensor>* input_tensors,
                  const std::vector<WhisperDecoderLayerWeight<T>*>* decoder_layer_weights);
     void setStream(cudaStream_t stream) override;
 };

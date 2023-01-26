@@ -1,11 +1,12 @@
 # %%
+# import pdb; pdb.set_trace()
+
 import os
 import sys
 ROOT_DIR = os.path.abspath("../../../")
-sys.path.append(ROOT_DIR)
-lib_path = os.path.join(ROOT_DIR, 'build/lib/libth_whisper.so')
-# lib_path = os.path.join(ROOT_DIR, 'build/lib/libth_bart.so')
-
+sys.path.append('/workspace/FasterTransformer')
+# lib_path = os.path.join(ROOT_DIR, 'build/lib/libth_whisper.so')
+lib_path = '/workspace/FasterTransformer/build/lib/libth_whisper.so'
 # disable warning in notebook
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -20,6 +21,7 @@ import math
 from transformers import PreTrainedTokenizerFast
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
 from examples.pytorch.whisper.utils.ft_encoder import FTWhisperEncoderWeight, FTWhisperEncoder
+from examples.pytorch.whisper.utils.ft_decoder import FTWhisperDecoderWeight, FTWhisperDecoder
 from examples.pytorch.whisper.utils.ft_decoding import FTWhisperDecodingWeight, FTWhisperDecoding, FTWhisper
 from utils.dataset import LibriSpeech
 import whisper
@@ -31,7 +33,8 @@ import whisper
 # specify model name or checkpoint path
 # model_name = 'facebook/Whisper-base' # Whisper
 device = torch.device("cuda")
-whisper_name = "large-v2"
+# whisper_name = "large-v2"
+whisper_name = "tiny.en"
 processor = WhisperProcessor.from_pretrained(f"openai/whisper-{whisper_name}")
 tokenizer = processor.tokenizer
 model = (
@@ -46,7 +49,7 @@ layernorm_type = "pre_layernorm"
 is_mwhisper = True
 # %%
 # prep data
-batch_size = 256
+batch_size = 8
 # batch_size = 192
 loader = torch.utils.data.DataLoader(
     dataset,
@@ -86,7 +89,7 @@ use_fp16 = True
 
 # %% [markdown]
 # ### Load layer weights 
-
+# %%
 # ft_encoder_weight = FTWhisperEncoderWeight(
 #     config,
 #     tensor_para_size,
@@ -98,6 +101,18 @@ use_fp16 = True
 #     weight_data_type=weight_data_type,
 # )
 # ft_encoder_weight.load_from_model(model.float())
+
+ft_decoder_weight = FTWhisperDecoderWeight(
+    config,
+    tensor_para_size,
+    pipeline_para_size,
+    whisper_with_bias=whisper_with_bias,
+    mwhisper=is_mwhisper,
+    use_gated_activation=use_gated_activation,
+    position_embedding_type=position_embedding_type,
+    weight_data_type=weight_data_type,
+)
+ft_decoder_weight.load_from_model(model)
 
 ft_decoding_weight = FTWhisperDecodingWeight(
     config,
@@ -114,19 +129,28 @@ ft_decoding_weight.load_from_model(model)
 
 if use_fp16:
     # ft_encoder_weight.to_half()
+    ft_decoder_weight.to_half()
     ft_decoding_weight.to_half()
 
 # %% [markdown]
 # ### Setup Encoder, Decoder, and E2E model
 
-# ft_encoder = FTWhisperEncoder(ft_encoder_weight.w, lib_path, config.encoder_attention_heads,
+
+# ft_encoder = FTWhisperEncoder([None for i in range(24)], lib_path, config.encoder_attention_heads,
 #                         encoder_head_size, config.encoder_ffn_dim,
 #                         config.d_model, remove_padding, config.encoder_layers, 
 #                         tensor_para_size=tensor_para_size, pipeline_para_size=pipeline_para_size, 
 #                         whisper_with_bias=whisper_with_bias, mwhisper=is_mwhisper,
 #                         position_embedding_type=position_embedding_type, 
 #                         activation_type=activation_type, layernorm_type=layernorm_type)
-
+# %%
+ft_decoder = FTWhisperDecoder(ft_decoder_weight.w, lib_path, config.decoder_attention_heads, decoder_head_size,
+                        config.decoder_ffn_dim, config.d_model, config.d_model, config.decoder_layers, 
+                        tensor_para_size=tensor_para_size, pipeline_para_size=pipeline_para_size, 
+                        whisper_with_bias=whisper_with_bias, mwhisper=is_mwhisper,
+                        position_embedding_type=position_embedding_type, 
+                        activation_type=activation_type, layernorm_type=layernorm_type)
+# %%
 ft_decoding = FTWhisperDecoding(ft_decoding_weight.w, lib_path,
                         config.decoder_attention_heads, decoder_head_size,
                         config.decoder_ffn_dim, config.d_model,
@@ -167,7 +191,7 @@ with torch.inference_mode():
 torch.cuda.synchronize()
 
 # %%
-max_output_len = 99
+max_output_len = 448
 ft_max_output_len = max_output_len - 2  # to achieve identical results w/ HF, exclude start & end tokens
 num_beams = 1
 beam_search_diversity_rate = 0.0
@@ -179,25 +203,25 @@ measurement_iters = 10
 # ## HF output and timing
 
 # %%
-if use_fp16:
-    model.half()
-else:
-    model.float()
-hf_outputs = model.generate(encoder_outputs=encoder_outputs, max_new_tokens=model.config.max_length, use_cache=True, num_beams=num_beams)
-hf_tokens = tokenizer.batch_decode(hf_outputs, skip_special_tokens=True)
-print("HF output ids",hf_outputs)
-print("HF output text",hf_tokens)
+# if use_fp16:
+#     model.half()
+# else:
+#     model.float()
+# hf_outputs = model.generate(encoder_outputs=encoder_outputs, max_new_tokens=model.config.max_length, use_cache=True, num_beams=num_beams)
+# hf_tokens = tokenizer.batch_decode(hf_outputs, skip_special_tokens=True)
+# print("HF output ids",hf_outputs)
+# print("HF output text",hf_tokens)
 
 # %%
-hf_latencies = []
-for _ in range(measurement_iters):
-    start_time = time.time()
-    model.generate(encoder_outputs=encoder_outputs, max_new_tokens=model.config.max_length, use_cache=True, num_beams=num_beams)
-    end_time = time.time()
-    hf_latencies.append(end_time - start_time)
-hf_p50 = np.percentile(hf_latencies, 50)
-hf_p99 = np.percentile(hf_latencies, 99)
-print(f"HF p50: {hf_p50*1000:.2f} ms, p99: {hf_p99*1000:.2f} ms ")
+# hf_latencies = []
+# for _ in range(measurement_iters):
+#     start_time = time.time()
+#     model.generate(encoder_outputs=encoder_outputs, max_new_tokens=model.config.max_length, use_cache=True, num_beams=num_beams)
+#     end_time = time.time()
+#     hf_latencies.append(end_time - start_time)
+# hf_p50 = np.percentile(hf_latencies, 50)
+# hf_p99 = np.percentile(hf_latencies, 99)
+# print(f"HF p50: {hf_p50*1000:.2f} ms, p99: {hf_p99*1000:.2f} ms ")
 
 # %% [markdown]
 # ## FT output and timing
@@ -215,54 +239,54 @@ return_dict = ft_whisper(None,
                       is_return_cum_log_probs=False,
                       encoder_outputs=encoder_outputs["last_hidden_state"])
 
-# ft_whisper returns output_ids of shape [batch_size, beam_width, max_output_seq_len]
-# ft_whisper returns sequence_length of shape [batch_size, beam_width]
-ft_output_ids = return_dict['output_ids']
-ft_sequence_length = return_dict['sequence_lengths']
+# # ft_whisper returns output_ids of shape [batch_size, beam_width, max_output_seq_len]
+# # ft_whisper returns sequence_length of shape [batch_size, beam_width]
+# ft_output_ids = return_dict['output_ids']
+# ft_sequence_length = return_dict['sequence_lengths']
 
-# %%
-ft_outputs = []
-for i in range(batch_size):
-    # selecting the top sequence from beam width number of sequences
-    ft_outputs.append(list(ft_output_ids[i, 0, :][1:ft_sequence_length[i , 0]])) # start from 1 to exclude the 1st token
-ft_tokens = tokenizer.batch_decode(ft_outputs, skip_special_tokens=True)
-print("FT output ids", ft_outputs)
-print("FT output text", ft_tokens)
+# # %%
+# ft_outputs = []
+# for i in range(batch_size):
+#     # selecting the top sequence from beam width number of sequences
+#     ft_outputs.append(list(ft_output_ids[i, 0, :][1:ft_sequence_length[i , 0]])) # start from 1 to exclude the 1st token
+# ft_tokens = tokenizer.batch_decode(ft_outputs, skip_special_tokens=True)
+# print("FT output ids", ft_outputs)
+# print("FT output text", ft_tokens)
 
-# %%
-ft_latencies = []
-tok_counts = []
-for _ in range(measurement_iters):
-    start_time = time.time()
-    return_dict = ft_whisper(None,
-                      None,
-                      inputs_embeds=None,
-                      beam_size=num_beams,
-                      max_seq_len=ft_max_output_len,
-                      top_k=topk,
-                      top_p=topp,
-                      beam_search_diversity_rate=beam_search_diversity_rate,
-                      is_return_output_log_probs=False,
-                      is_return_cum_log_probs=False,
-                      encoder_outputs=encoder_outputs["last_hidden_state"])
-    end_time = time.time()
-    ft_latencies.append(end_time - start_time)
-    tok_counts.append(sum(return_dict['sequence_lengths']))
-ft_p50 = np.percentile(ft_latencies, 50)
-ft_p99 = np.percentile(ft_latencies, 99)
-ft_p50_tok = np.percentile(tok_counts, 50)
-print(f"FT p50: {ft_p50*1000:.2f} ms, p99: {ft_p99*1000:.2f} ms, tok/s: {ft_p50_tok/ft_p50} ")
+# # %%
+# ft_latencies = []
+# tok_counts = []
+# for _ in range(measurement_iters):
+#     start_time = time.time()
+#     return_dict = ft_whisper(None,
+#                       None,
+#                       inputs_embeds=None,
+#                       beam_size=num_beams,
+#                       max_seq_len=ft_max_output_len,
+#                       top_k=topk,
+#                       top_p=topp,
+#                       beam_search_diversity_rate=beam_search_diversity_rate,
+#                       is_return_output_log_probs=False,
+#                       is_return_cum_log_probs=False,
+#                       encoder_outputs=encoder_outputs["last_hidden_state"])
+#     end_time = time.time()
+#     ft_latencies.append(end_time - start_time)
+#     tok_counts.append(sum(return_dict['sequence_lengths']))
+# ft_p50 = np.percentile(ft_latencies, 50)
+# ft_p99 = np.percentile(ft_latencies, 99)
+# ft_p50_tok = np.percentile(tok_counts, 50)
+# print(f"FT p50: {ft_p50*1000:.2f} ms, p99: {ft_p99*1000:.2f} ms, tok/s: {ft_p50_tok/ft_p50} ")
 
-# %% [markdown]
-# ## Performance summary
+# # %% [markdown]
+# # ## Performance summary
 
-# %%
-print(f"Precision: {'FP16' if use_fp16 else 'FP32'}")
-print(f"Input length: 0, Output length: {model.config.max_length}")
-print(f"HF p50: {hf_p50*1000:.2f} ms, p99: {hf_p99*1000:.2f} ms, tok/s: {ft_p50_tok/hf_p50} ")
-print(f"FT p50: {ft_p50*1000:.2f} ms, p99: {ft_p99*1000:.2f} ms, tok/s: {ft_p50_tok/ft_p50} ")
+# # %%
+# print(f"Precision: {'FP16' if use_fp16 else 'FP32'}")
+# print(f"Input length: 0, Output length: {model.config.max_length}")
+# print(f"HF p50: {hf_p50*1000:.2f} ms, p99: {hf_p99*1000:.2f} ms, tok/s: {ft_p50_tok/hf_p50} ")
+# print(f"FT p50: {ft_p50*1000:.2f} ms, p99: {ft_p99*1000:.2f} ms, tok/s: {ft_p50_tok/ft_p50} ")
 
-# %%
+# # %%
 
 
 

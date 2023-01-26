@@ -31,38 +31,38 @@ struct SATypeConverter<half> {
 };
 
 template<typename T>
-void fusedQKV_masked_attention_dispatch(const T*     qkv_buf,
-                                        const T*     qkv_bias,
-                                        const T*     relative_attention_bias,
-                                        T*           key_cache,
-                                        T*           value_cache,
-                                        const int*   cache_indir,
-                                        T*           context_buf,
-                                        const bool*  finished,
-                                        const int*   sequence_lengths,
-                                        const int    max_batch_size,
-                                        const int    inference_batch_size,
-                                        const int    beam_width,
-                                        const int    head_num,
-                                        const int    size_per_head,
-                                        const int    rotary_embedding_dim,
-                                        const bool   neox_rotary_style,
-                                        const int    memory_max_len,
-                                        const int*   prefix_prompt_lengths,
-                                        const int    max_prefix_prompt_length,
-                                        const int    max_input_len,
-                                        const int*   total_padding_tokens,
-                                        const int    step,
-                                        const float  q_scaling,
-                                        const int    relative_attention_bias_stride,
-                                        const T*     linear_bias_slopes,
-                                        const bool*  masked_tokens,
-                                        const int*   ia3_tasks,
-                                        const T*     ia3_key_weights,
-                                        const T*     ia3_value_weights,
+void fusedQKV_masked_attention_dispatch(const T* qkv_buf,
+                                        const T* qkv_bias,
+                                        const T* relative_attention_bias,
+                                        T* key_cache,
+                                        T* value_cache,
+                                        const int* cache_indir,
+                                        T* context_buf,
+                                        const bool* finished,
+                                        const int* sequence_lengths,
+                                        const int max_batch_size,
+                                        const int inference_batch_size,
+                                        const int beam_width,
+                                        const int head_num,
+                                        const int size_per_head,
+                                        const int rotary_embedding_dim,
+                                        const bool neox_rotary_style,
+                                        const int memory_max_len,
+                                        const int* prefix_prompt_lengths,
+                                        const int max_prefix_prompt_length,
+                                        const int max_input_len,
+                                        const int* total_padding_tokens,
+                                        const int step,
+                                        const float q_scaling,
+                                        const int relative_attention_bias_stride,
+                                        const T* linear_bias_slopes,
+                                        const bool* masked_tokens,
+                                        const int* ia3_tasks,
+                                        const T* ia3_key_weights,
+                                        const T* ia3_value_weights,
                                         const float* qkv_scale_out,
                                         const float* attention_out_scale,
-                                        const int    int8_mode,
+                                        const int int8_mode,
                                         cudaStream_t stream)
 {
     using DataType = typename SATypeConverter<T>::Type;
@@ -94,24 +94,24 @@ void fusedQKV_masked_attention_dispatch(const T*     qkv_buf,
         params.k = reinterpret_cast<const DataType*>(reinterpret_cast<const int8_t*>(qkv_buf) + hidden_units);
         params.v = reinterpret_cast<const DataType*>(reinterpret_cast<const int8_t*>(qkv_buf) + 2 * hidden_units);
     }
-    params.stride   = 3 * hidden_units;
+    params.stride = 3 * hidden_units;
     params.finished = const_cast<bool*>(finished);
 
-    params.k_cache                  = reinterpret_cast<DataType*>(key_cache);
-    params.v_cache                  = reinterpret_cast<DataType*>(value_cache);
-    params.cache_indir              = cache_indir;
-    params.batch_size               = inference_batch_size;
-    params.beam_width               = beam_width;
-    params.memory_max_len           = memory_max_len;
-    params.prefix_prompt_lengths    = prefix_prompt_lengths;
+    params.k_cache = reinterpret_cast<DataType*>(key_cache);
+    params.v_cache = reinterpret_cast<DataType*>(value_cache);
+    params.cache_indir = cache_indir;
+    params.batch_size = inference_batch_size;
+    params.beam_width = beam_width;
+    params.memory_max_len = memory_max_len;
+    params.prefix_prompt_lengths = prefix_prompt_lengths;
     params.max_prefix_prompt_length = max_prefix_prompt_length;
-    params.length_per_sample        = sequence_lengths;  // max_input_length + current output length
+    params.length_per_sample = sequence_lengths;  // max_input_length + current output length
     // timestep adding max_prefix_prompt_length for shared memory size calculation and rotary embedding computation
-    params.timestep             = step + max_prefix_prompt_length - 1;
-    params.num_heads            = head_num;
+    params.timestep = step + max_prefix_prompt_length - 1;
+    params.num_heads = head_num;
     params.hidden_size_per_head = size_per_head;
     params.rotary_embedding_dim = rotary_embedding_dim;
-    params.neox_rotary_style    = neox_rotary_style;
+    params.neox_rotary_style = neox_rotary_style;
     // Note: keep norm factor (sqrt(K_dim)) when adopting megatron T5 structure (may adjust)
     params.inv_sqrt_dh = 1.F / (sqrtf((float)params.hidden_size_per_head) * q_scaling);
 
@@ -120,7 +120,7 @@ void fusedQKV_masked_attention_dispatch(const T*     qkv_buf,
         params.relative_attention_bias = reinterpret_cast<const DataType*>(relative_attention_bias);
     }
     params.relative_attention_bias_stride = relative_attention_bias_stride;
-    params.masked_tokens                  = masked_tokens;
+    params.masked_tokens = masked_tokens;
 
     // The slope of linear position bias per head, e.g., ALiBi.
     if (linear_bias_slopes != nullptr) {
@@ -128,52 +128,52 @@ void fusedQKV_masked_attention_dispatch(const T*     qkv_buf,
     }
     params.max_input_length = max_input_len;
 
-    params.ia3_tasks         = ia3_tasks;
-    params.ia3_key_weights   = reinterpret_cast<const DataType*>(ia3_key_weights);
+    params.ia3_tasks = ia3_tasks;
+    params.ia3_key_weights = reinterpret_cast<const DataType*>(ia3_key_weights);
     params.ia3_value_weights = reinterpret_cast<const DataType*>(ia3_value_weights);
 
     params.int8_mode = int8_mode;
     if (int8_mode == 2) {
-        params.qkv_scale_out       = qkv_scale_out;
+        params.qkv_scale_out = qkv_scale_out;
         params.attention_out_scale = attention_out_scale;
     }
-
+    sync_check_cuda_error();
     masked_multihead_attention(params, stream);
 }
 
 #define INSTANTIATE_FUSEDQKV_MASKED_ATTENTION_DISPATCH(T)                                                              \
-    template void fusedQKV_masked_attention_dispatch(const T*     qkv_buf,                                             \
-                                                     const T*     qkv_bias,                                            \
-                                                     const T*     relative_attention_bias,                             \
-                                                     T*           key_cache,                                           \
-                                                     T*           value_cache,                                         \
-                                                     const int*   cache_indir,                                         \
-                                                     T*           context_buf,                                         \
-                                                     const bool*  finished,                                            \
-                                                     const int*   sequence_lengths,                                    \
-                                                     const int    max_batch_size,                                      \
-                                                     const int    inference_batch_size,                                \
-                                                     const int    beam_width,                                          \
-                                                     const int    head_num,                                            \
-                                                     const int    size_per_head,                                       \
-                                                     const int    rotary_embedding_dim,                                \
-                                                     const bool   neox_rotary_style,                                   \
-                                                     const int    memory_max_len,                                      \
-                                                     const int*   prefix_prompt_lengths,                               \
-                                                     const int    max_prefix_prompt_length,                            \
-                                                     const int    max_input_len,                                       \
-                                                     const int*   total_padding_tokens,                                \
-                                                     const int    step,                                                \
-                                                     const float  q_scaling,                                           \
-                                                     const int    relative_attention_bias_stride,                      \
-                                                     const T*     linear_bias_slopes,                                  \
-                                                     const bool*  masked_tokens,                                       \
-                                                     const int*   ia3_tasks,                                           \
-                                                     const T*     ia3_key_weights,                                     \
-                                                     const T*     ia3_value_weights,                                   \
+    template void fusedQKV_masked_attention_dispatch(const T* qkv_buf,                                                 \
+                                                     const T* qkv_bias,                                                \
+                                                     const T* relative_attention_bias,                                 \
+                                                     T* key_cache,                                                     \
+                                                     T* value_cache,                                                   \
+                                                     const int* cache_indir,                                           \
+                                                     T* context_buf,                                                   \
+                                                     const bool* finished,                                             \
+                                                     const int* sequence_lengths,                                      \
+                                                     const int max_batch_size,                                         \
+                                                     const int inference_batch_size,                                   \
+                                                     const int beam_width,                                             \
+                                                     const int head_num,                                               \
+                                                     const int size_per_head,                                          \
+                                                     const int rotary_embedding_dim,                                   \
+                                                     const bool neox_rotary_style,                                     \
+                                                     const int memory_max_len,                                         \
+                                                     const int* prefix_prompt_lengths,                                 \
+                                                     const int max_prefix_prompt_length,                               \
+                                                     const int max_input_len,                                          \
+                                                     const int* total_padding_tokens,                                  \
+                                                     const int step,                                                   \
+                                                     const float q_scaling,                                            \
+                                                     const int relative_attention_bias_stride,                         \
+                                                     const T* linear_bias_slopes,                                      \
+                                                     const bool* masked_tokens,                                        \
+                                                     const int* ia3_tasks,                                             \
+                                                     const T* ia3_key_weights,                                         \
+                                                     const T* ia3_value_weights,                                       \
                                                      const float* qkv_scale_out,                                       \
                                                      const float* attention_out_scale,                                 \
-                                                     const int    int8_mode,                                           \
+                                                     const int int8_mode,                                              \
                                                      cudaStream_t stream)
 
 INSTANTIATE_FUSEDQKV_MASKED_ATTENTION_DISPATCH(float);
@@ -197,8 +197,8 @@ void DecoderSelfAttentionLayer<T>::allocateBuffer()
         if (int8_mode_ == 1) {
             // We use max_size for n and k since we reuse buffers for both FCs and want to allocate the max
             // possible memory that would be required by any of the individual gemms.
-            const int max_size    = std::max(d_model_, 3 * local_hidden_units_);
-            mixed_gemm_ws_bytes_  = weight_only_int8_fc_runner_->getWorkspaceSize(max_batch_size_, max_size, max_size);
+            const int max_size = std::max(d_model_, 3 * local_hidden_units_);
+            mixed_gemm_ws_bytes_ = weight_only_int8_fc_runner_->getWorkspaceSize(max_batch_size_, max_size, max_size);
             mixed_gemm_workspace_ = (char*)allocator_->reMalloc(mixed_gemm_workspace_, mixed_gemm_ws_bytes_, false);
         }
 
@@ -219,8 +219,8 @@ void DecoderSelfAttentionLayer<T>::allocateBuffer(size_t batch_size)
     if (int8_mode_ == 1) {
         // We use max_size for n and k since we reuse buffers for both FCs and want to allocate the max
         // possible memory that would be required by any of the individual gemms.
-        const int max_size    = std::max(d_model_, 3 * local_hidden_units_);
-        mixed_gemm_ws_bytes_  = weight_only_int8_fc_runner_->getWorkspaceSize(batch_size, max_size, max_size);
+        const int max_size = std::max(d_model_, 3 * local_hidden_units_);
+        mixed_gemm_ws_bytes_ = weight_only_int8_fc_runner_->getWorkspaceSize(batch_size, max_size, max_size);
         mixed_gemm_workspace_ = (char*)allocator_->reMalloc(mixed_gemm_workspace_, mixed_gemm_ws_bytes_, false);
     }
     is_allocate_buffer_ = true;
@@ -255,20 +255,20 @@ bool DecoderSelfAttentionLayer<T>::isValidBatchSize(size_t batch_size)
 }
 
 template<typename T>
-DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t           max_batch_size,
-                                                        size_t           head_num,
-                                                        size_t           size_per_head,
-                                                        size_t           local_head_num,
-                                                        size_t           rotary_embedding_dim,
-                                                        bool             neox_rotary_style,
-                                                        size_t           d_model,
-                                                        const float      q_scaling,
-                                                        cudaStream_t     stream,
+DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t max_batch_size,
+                                                        size_t head_num,
+                                                        size_t size_per_head,
+                                                        size_t local_head_num,
+                                                        size_t rotary_embedding_dim,
+                                                        bool neox_rotary_style,
+                                                        size_t d_model,
+                                                        const float q_scaling,
+                                                        cudaStream_t stream,
                                                         cublasMMWrapper* cublas_wrapper,
-                                                        IAllocator*      allocator,
-                                                        bool             is_free_buffer_after_forward,
-                                                        bool             sparse,
-                                                        int              int8_mode):
+                                                        IAllocator* allocator,
+                                                        bool is_free_buffer_after_forward,
+                                                        bool sparse,
+                                                        int int8_mode):
     BaseAttentionLayer<T>(stream, cublas_wrapper, allocator, is_free_buffer_after_forward, sparse),
     max_batch_size_(max_batch_size),
     head_num_(head_num),
@@ -292,15 +292,15 @@ DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t           max_bat
 }
 
 template<typename T>
-DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t           max_batch_size,
-                                                        size_t           head_num,
-                                                        size_t           size_per_head,
-                                                        cudaStream_t     stream,
+DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t max_batch_size,
+                                                        size_t head_num,
+                                                        size_t size_per_head,
+                                                        cudaStream_t stream,
                                                         cublasMMWrapper* cublas_wrapper,
-                                                        IAllocator*      allocator,
-                                                        bool             is_free_buffer_after_forward,
-                                                        bool             sparse,
-                                                        int              int8_mode):
+                                                        IAllocator* allocator,
+                                                        bool is_free_buffer_after_forward,
+                                                        bool sparse,
+                                                        int int8_mode):
     DecoderSelfAttentionLayer<T>(max_batch_size,
                                  head_num,
                                  size_per_head,
@@ -319,16 +319,16 @@ DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t           max_bat
 }
 
 template<typename T>
-DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t           max_batch_size,
-                                                        size_t           head_num,
-                                                        size_t           size_per_head,
-                                                        const float      q_scaling,
-                                                        cudaStream_t     stream,
+DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t max_batch_size,
+                                                        size_t head_num,
+                                                        size_t size_per_head,
+                                                        const float q_scaling,
+                                                        cudaStream_t stream,
                                                         cublasMMWrapper* cublas_wrapper,
-                                                        IAllocator*      allocator,
-                                                        bool             is_free_buffer_after_forward,
-                                                        bool             sparse,
-                                                        int              int8_mode):
+                                                        IAllocator* allocator,
+                                                        bool is_free_buffer_after_forward,
+                                                        bool sparse,
+                                                        int int8_mode):
     DecoderSelfAttentionLayer<T>(max_batch_size,
                                  head_num,
                                  size_per_head,
@@ -347,16 +347,16 @@ DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t           max_bat
 }
 
 template<typename T>
-DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t           max_batch_size,
-                                                        size_t           head_num,
-                                                        size_t           size_per_head,
-                                                        size_t           local_head_num,
-                                                        cudaStream_t     stream,
+DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t max_batch_size,
+                                                        size_t head_num,
+                                                        size_t size_per_head,
+                                                        size_t local_head_num,
+                                                        cudaStream_t stream,
                                                         cublasMMWrapper* cublas_wrapper,
-                                                        IAllocator*      allocator,
-                                                        bool             is_free_buffer_after_forward,
-                                                        bool             sparse,
-                                                        int              int8_mode):
+                                                        IAllocator* allocator,
+                                                        bool is_free_buffer_after_forward,
+                                                        bool sparse,
+                                                        int int8_mode):
     DecoderSelfAttentionLayer<T>(max_batch_size,
                                  head_num,
                                  size_per_head,
@@ -375,18 +375,18 @@ DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t           max_bat
 }
 
 template<typename T>
-DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t           max_batch_size,
-                                                        size_t           head_num,
-                                                        size_t           size_per_head,
-                                                        size_t           local_head_num,
-                                                        size_t           d_model,
-                                                        const float      q_scaling,
-                                                        cudaStream_t     stream,
+DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t max_batch_size,
+                                                        size_t head_num,
+                                                        size_t size_per_head,
+                                                        size_t local_head_num,
+                                                        size_t d_model,
+                                                        const float q_scaling,
+                                                        cudaStream_t stream,
                                                         cublasMMWrapper* cublas_wrapper,
-                                                        IAllocator*      allocator,
-                                                        bool             is_free_buffer_after_forward,
-                                                        bool             sparse,
-                                                        int              int8_mode):
+                                                        IAllocator* allocator,
+                                                        bool is_free_buffer_after_forward,
+                                                        bool sparse,
+                                                        int int8_mode):
     DecoderSelfAttentionLayer<T>(max_batch_size,
                                  head_num,
                                  size_per_head,
@@ -405,18 +405,18 @@ DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t           max_bat
 }
 
 template<typename T>
-DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t           max_batch_size,
-                                                        size_t           head_num,
-                                                        size_t           size_per_head,
-                                                        size_t           local_head_num,
-                                                        size_t           rotary_embedding_dim,
-                                                        bool             neox_rotary_style,
-                                                        cudaStream_t     stream,
+DecoderSelfAttentionLayer<T>::DecoderSelfAttentionLayer(size_t max_batch_size,
+                                                        size_t head_num,
+                                                        size_t size_per_head,
+                                                        size_t local_head_num,
+                                                        size_t rotary_embedding_dim,
+                                                        bool neox_rotary_style,
+                                                        cudaStream_t stream,
                                                         cublasMMWrapper* cublas_wrapper,
-                                                        IAllocator*      allocator,
-                                                        bool             is_free_buffer_after_forward,
-                                                        bool             sparse,
-                                                        int              int8_mode):
+                                                        IAllocator* allocator,
+                                                        bool is_free_buffer_after_forward,
+                                                        bool sparse,
+                                                        int int8_mode):
     DecoderSelfAttentionLayer<T>(max_batch_size,
                                  head_num,
                                  size_per_head,
@@ -461,8 +461,8 @@ DecoderSelfAttentionLayer<T>::~DecoderSelfAttentionLayer()
 }
 
 template<typename T>
-void DecoderSelfAttentionLayer<T>::forward(TensorMap*                output_tensors,
-                                           TensorMap*                input_tensors,
+void DecoderSelfAttentionLayer<T>::forward(TensorMap* output_tensors,
+                                           TensorMap* input_tensors,
                                            const AttentionWeight<T>* attention_weights)
 {
     // input tensors:
@@ -491,27 +491,27 @@ void DecoderSelfAttentionLayer<T>::forward(TensorMap*                output_tens
              || output_tensors->at("value_cache").shape.size() == 3);
     allocateBuffer(input_tensors->at("input_query").shape[0]);
 
-    const T*    attention_input         = input_tensors->getPtr<T>("input_query");
-    const int*  sequence_lengths        = input_tensors->getPtr<int>("sequence_lengths");
-    const bool* finished                = input_tensors->getPtr<bool>("finished", nullptr);
-    const bool* masked_tokens           = input_tensors->getPtr<bool>("masked_tokens", nullptr);
-    const int*  cache_indir             = input_tensors->getPtr<int>("cache_indirection", nullptr);
-    const T*    relative_attention_bias = input_tensors->getPtr<T>("relative_attention_bias", nullptr);
-    const int   relative_attention_bias_stride =
+    const T* attention_input = input_tensors->getPtr<T>("input_query");
+    const int* sequence_lengths = input_tensors->getPtr<int>("sequence_lengths");
+    const bool* finished = input_tensors->getPtr<bool>("finished", nullptr);
+    const bool* masked_tokens = input_tensors->getPtr<bool>("masked_tokens", nullptr);
+    const int* cache_indir = input_tensors->getPtr<int>("cache_indirection", nullptr);
+    const T* relative_attention_bias = input_tensors->getPtr<T>("relative_attention_bias", nullptr);
+    const int relative_attention_bias_stride =
         input_tensors->isExist("relative_attention_bias") ? input_tensors->at("relative_attention_bias").shape[3] : 0;
-    const T*   linear_bias_slopes = input_tensors->getPtr<T>("linear_bias_slopes", nullptr);
-    const bool has_ia3            = input_tensors->isExist("ia3_tasks");
+    const T* linear_bias_slopes = input_tensors->getPtr<T>("linear_bias_slopes", nullptr);
+    const bool has_ia3 = input_tensors->isExist("ia3_tasks");
 
     T* attention_out = output_tensors->getPtr<T>("hidden_features");
-    T* key_cache     = output_tensors->getPtr<T>("key_cache");
-    T* value_cache   = output_tensors->getPtr<T>("value_cache");
+    T* key_cache = output_tensors->getPtr<T>("key_cache");
+    T* value_cache = output_tensors->getPtr<T>("value_cache");
 
-    const int batch_size     = input_tensors->at("input_query").shape[0];
-    const int beam_width     = cache_indir != nullptr ? input_tensors->at("cache_indirection").shape[1] : 1;
+    const int batch_size = input_tensors->at("input_query").shape[0];
+    const int beam_width = cache_indir != nullptr ? input_tensors->at("cache_indirection").shape[1] : 1;
     const int memory_max_len = output_tensors->at("key_cache").shape[3];
 
-    const int* d_prefix_prompt_lengths  = input_tensors->getPtr<int>("d_prefix_prompt_lengths", nullptr);
-    const int  max_prefix_prompt_length = input_tensors->getVal<int>("max_prefix_prompt_length", 0);
+    const int* d_prefix_prompt_lengths = input_tensors->getPtr<int>("d_prefix_prompt_lengths", nullptr);
+    const int max_prefix_prompt_length = input_tensors->getVal<int>("max_prefix_prompt_length", 0);
 
     const int m_padded = 8 * div_up(batch_size, 8);
 #ifdef SPARSITY_ENABLED
@@ -519,7 +519,7 @@ void DecoderSelfAttentionLayer<T>::forward(TensorMap*                output_tens
 #else
     constexpr bool use_sparse_gemm = false;
 #endif
-
+// 
     if (use_sparse_gemm) {
 #ifdef SPARSITY_ENABLED
         cublas_wrapper_->SpGemm(CUBLAS_OP_N,

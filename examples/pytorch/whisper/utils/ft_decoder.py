@@ -1,3 +1,4 @@
+# %%
 
 
 # Copyright (c) 2020-2022, NVIDIA CORPORATION.  All rights reserved.
@@ -260,10 +261,12 @@ class FTWhisperDecoder(nn.Module):
     def __init__(self, decoder_weight_list, lib_path, head_num, head_size, inter_size,
                  mem_d_model, d_model, num_layer, tensor_para_size=1, 
                  pipeline_para_size=1, whisper_with_bias=True, mwhisper=True, position_embedding_type=1,
-                 activation_type="gelu", layernorm_type="post_layernorm"):
+                 activation_type="gelu", layernorm_type="post_layernorm", max_seq_len = 448):
         super().__init__()
         self.use_mpi = dist.is_mpi_available()
-
+        self.num_layer=num_layer
+        self.head_num=head_num
+        self.max_seq_len=max_seq_len
         if self.use_mpi:
             try:
                 dist.init_process_group(backend='mpi')
@@ -286,24 +289,45 @@ class FTWhisperDecoder(nn.Module):
                                                                     whisper_with_bias, mwhisper, position_embedding_type, activation_type, layernorm_type)
 
     
-    def forward(self, inputs, memory, memory_seq_lens, self_cache, mem_cache, sequence_lengths, step):
+    def forward(self, inputs, memory, self_cache, mem_cache, step, beam_width=1):
         """
-        inputs: I'm assuming are token ids, gotten from previous decoder outputs
+        inputs: hidden states, input token_embeds 
         memory: encoder_outputs, embeddings
         memory_seq_lens: length of encoder_outputs
         self_cache: self-attention kv-cache
         mem_cache: cross-attention kv-cache
         step: number of the current decoding step
         """
-        encoder_outputs = memory
-        memory_seq_lens = torch.tensor([encoder_outputs.shape[1]]*encoder_outputs.shape[0]).type(torch.int32).to("cuda")
+        # step = inputs.shape[0] # according to hf: hidden_states (`torch.FloatTensor`): input to the layer of shape `(seq_len, batch, embed_dim)`
+        # batch_size = inputs_shape[1] # # according to hf: hidden_states (`torch.FloatTensor`): input to the layer of shape `(seq_len, batch, embed_dim)`
         inputs_shape = inputs.shape
-        inputs = inputs.reshape([-1, inputs.shape[-1]])
+        batch_size = inputs_shape[0]
+        hidden_dim = inputs_shape[-1]
+        encoder_outputs = memory
+        encoder_seq_len = encoder_outputs.shape[1]
+        mem_seq_lens = torch.tensor([encoder_seq_len]*encoder_outputs.shape[0]).type(torch.int32).to("cuda")
+        seq_lens = torch.tensor([step]*batch_size).type(torch.int32).to("cuda")
+        dtype = inputs.dtype
+        size_per_head = hidden_dim // self.head_num
+        element_size = inputs.element_size()
+        if self_cache is None:
+            self_cache = [
+                torch.empty(self.num_layer, batch_size * beam_width, self.head_num, int(size_per_head/(16/element_size)), self.max_seq_len+1, int((16/element_size)), dtype=dtype, device='cuda'), # k_cache, the 1 is bc in decoding.cc it uses sizeof(T)/16, we're assuming T=fp16
+                torch.empty(self.num_layer, batch_size * beam_width, self.head_num, self.max_seq_len+1, size_per_head, dtype=dtype, device='cuda') #v_cache
+                ] 
+        # inputs = inputs.reshape([-1, hidden_dim])
+        if mem_cache is None:
+            mem_cache = torch.empty(2, self.num_layer, batch_size * beam_width, encoder_seq_len, hidden_dim, dtype=dtype, device='cuda')
+        relative_attention_bias_tensor=torch.empty((1, self.head_num, step, step))
+        finished = torch.zeros(batch_size * beam_width, dtype=torch.bool, device='cuda')
         output, self_key_cache, self_val_cache, mem_key_cache, mem_val_cache = \
-                self.dec_layer.forward(step, inputs, memory, memory_seq_lens, sequence_lengths,
-                                       self_cache[0], self_cache[1], mem_cache[0], mem_cache[1])
+                self.decoder.forward2(step, inputs, memory, mem_seq_lens, seq_lens,
+                # self.decoder.forward2(step, inputs.squeeze(), memory, mem_seq_lens, seq_lens,
+                                       self_cache[0], self_cache[1], 
+                                       mem_cache[0], mem_cache[1], 
+                                       relative_attention_bias_tensor,
+                                       finished)
         output = output.reshape(inputs_shape)
 
         return output, [self_key_cache, self_val_cache], [mem_key_cache, mem_val_cache]
-
 

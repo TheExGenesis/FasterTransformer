@@ -27,44 +27,44 @@ class IFTWhisperDecoding {
 public:
     virtual ~IFTWhisperDecoding() {}
     virtual std::vector<th::Tensor> forward(th::optional<int64_t> beam_width_opt,
-                                            size_t                max_seq_len,
+                                            size_t max_seq_len,
                                             th::optional<int64_t> top_k_opt,
-                                            th::optional<double>  top_p_opt,
-                                            th::optional<double>  beam_search_diversity_rate_opt,
-                                            th::optional<double>  temperature_opt,
-                                            th::optional<double>  len_penalty_opt,
-                                            th::optional<double>  repetition_penalty_opt,
+                                            th::optional<double> top_p_opt,
+                                            th::optional<double> beam_search_diversity_rate_opt,
+                                            th::optional<double> temperature_opt,
+                                            th::optional<double> len_penalty_opt,
+                                            th::optional<double> repetition_penalty_opt,
                                             th::optional<int64_t> random_seed_opt,
-                                            th::optional<bool>    is_return_output_log_probs_opt,
-                                            th::optional<bool>    is_return_cum_log_probs_opt,
-                                            th::optional<bool>    is_return_cross_attentions_opt,
-                                            th::Tensor            memory,
-                                            th::Tensor            memory_seq_lens) = 0;
+                                            th::optional<bool> is_return_output_log_probs_opt,
+                                            th::optional<bool> is_return_cum_log_probs_opt,
+                                            th::optional<bool> is_return_cross_attentions_opt,
+                                            th::Tensor memory,
+                                            th::Tensor memory_seq_lens) = 0;
 };
 
 template<typename T>
 class FTWhisperDecoding: public IFTWhisperDecoding {
 public:
-    FTWhisperDecoding(int                            head_num,
-                   int                            size_per_head,
-                   int                            inter_size,
-                   int                            mem_d_model,
-                   int                            d_model,
-                   int                            layer_num,
-                   int                            vocab_size,
-                   int                            num_bucket,
-                   int                            max_distance,
-                   double                         q_scaling,
-                   int                            start_id,
-                   int                            end_id,
-                   int                            tensor_para_size,
-                   int                            pipeline_para_size,
-                   bool                           whisper_with_bias,
-                   bool                           mwhisper,
-                   ft::PositionEmbeddingType      position_embedding_type,
-                   ft::ActivationType             activation_type,
-                   ft::LayerNormType              layernorm_type,
-                   const std::vector<th::Tensor>& w):
+    FTWhisperDecoding(int head_num,
+                      int size_per_head,
+                      int inter_size,
+                      int mem_d_model,
+                      int d_model,
+                      int layer_num,
+                      int vocab_size,
+                      int num_bucket,
+                      int max_distance,
+                      double q_scaling,
+                      int start_id,
+                      int end_id,
+                      int tensor_para_size,
+                      int pipeline_para_size,
+                      bool whisper_with_bias,
+                      bool mwhisper,
+                      ft::PositionEmbeddingType position_embedding_type,
+                      ft::ActivationType activation_type,
+                      ft::LayerNormType layernorm_type,
+                      const std::vector<th::Tensor>& w):
         head_num_(head_num),
         size_per_head_(size_per_head),
         inter_size_(inter_size),
@@ -88,11 +88,12 @@ public:
         ft::ftNcclInitialize(tensor_para_, pipeline_para_, tensor_para_size, pipeline_para_size);
 
         ft::check_cuda_error(cublasLtCreate(&cublasltHandle_));
-        cublas_algo_map_      = new ft::cublasAlgoMap("gemm_config.in");
+        cublas_algo_map_ = new ft::cublasAlgoMap("gemm_config.in");
         cublas_wrapper_mutex_ = new std::mutex();
 
         decoding_weights.resizeLayer(layer_num_);
-        decoding_weights.setWhisperStructureDiff(whisper_with_bias, mwhisper, use_gated_activation, position_embedding_type);
+        decoding_weights.setWhisperStructureDiff(
+            whisper_with_bias, mwhisper, use_gated_activation, position_embedding_type);
         const int hidden_dim = head_num_ * size_per_head_;
 
         // Attention Layer-level weights
@@ -163,18 +164,18 @@ public:
 
         // Transformere Block-level weights
         decoding_weights.absolute_or_relative_position_embedding = get_ptr<T>(_weights[12]);
-        decoding_weights.pre_decoder_embedding_table             = get_ptr<T>(_weights[13]);
-        decoding_weights.post_decoder_embedding.kernel           = get_ptr<T>(_weights[14]);
-        decoding_weights.pre_decoder_layernorm.gamma             = get_ptr<T>(_weights[15]);
+        decoding_weights.pre_decoder_embedding_table = get_ptr<T>(_weights[13]);
+        decoding_weights.post_decoder_embedding.kernel = get_ptr<T>(_weights[14]);
+        decoding_weights.pre_decoder_layernorm.gamma = get_ptr<T>(_weights[15]);
 
         if (mwhisper_ && whisper_with_bias_) {
             decoding_weights.post_decoder_layernorm.gamma = get_ptr<T>(_weights[16]);
-            decoding_weights.pre_decoder_layernorm.beta   = get_ptr<T>(_weights[29]);
-            decoding_weights.post_decoder_layernorm.beta  = get_ptr<T>(_weights[30]);
-            decoding_weights.post_decoder_embedding.bias  = get_ptr<T>(_weights[31]);
+            decoding_weights.pre_decoder_layernorm.beta = get_ptr<T>(_weights[29]);
+            decoding_weights.post_decoder_layernorm.beta = get_ptr<T>(_weights[30]);
+            decoding_weights.post_decoder_embedding.bias = get_ptr<T>(_weights[31]);
         }
         else if (!mwhisper_ && whisper_with_bias_) {
-            decoding_weights.pre_decoder_layernorm.beta  = get_ptr<T>(_weights[29]);
+            decoding_weights.pre_decoder_layernorm.beta = get_ptr<T>(_weights[29]);
             decoding_weights.post_decoder_embedding.bias = get_ptr<T>(_weights[31]);
         }
         else if (mwhisper_ && !whisper_with_bias_) {
@@ -196,42 +197,42 @@ public:
     }
 
     std::vector<th::Tensor> forward(th::optional<int64_t> beam_width_opt,
-                                    size_t                max_seq_len,
+                                    size_t max_seq_len,
                                     th::optional<int64_t> top_k_opt,
-                                    th::optional<double>  top_p_opt,
-                                    th::optional<double>  beam_search_diversity_rate_opt,
-                                    th::optional<double>  temperature_opt,
-                                    th::optional<double>  len_penalty_opt,
-                                    th::optional<double>  repetition_penalty_opt,
+                                    th::optional<double> top_p_opt,
+                                    th::optional<double> beam_search_diversity_rate_opt,
+                                    th::optional<double> temperature_opt,
+                                    th::optional<double> len_penalty_opt,
+                                    th::optional<double> repetition_penalty_opt,
                                     th::optional<int64_t> random_seed_opt,
-                                    th::optional<bool>    is_return_output_log_probs_opt,
-                                    th::optional<bool>    is_return_cum_log_probs_opt,
-                                    th::optional<bool>    is_return_cross_attentions_opt,
-                                    th::Tensor            memory,
-                                    th::Tensor            memory_seq_lens) override
+                                    th::optional<bool> is_return_output_log_probs_opt,
+                                    th::optional<bool> is_return_cum_log_probs_opt,
+                                    th::optional<bool> is_return_cross_attentions_opt,
+                                    th::Tensor memory,
+                                    th::Tensor memory_seq_lens) override
     {
         // input validation
         size_t beam_width = beam_width_opt.has_value() ? (size_t)beam_width_opt.value() : 1;
-        uint   top_k      = top_k_opt.has_value() ? (uint)top_k_opt.value() : 1;
-        float  top_p      = top_p_opt.has_value() ? (float)top_p_opt.value() : 0.0f;
-        float  beam_search_diversity_rate =
+        uint top_k = top_k_opt.has_value() ? (uint)top_k_opt.value() : 1;
+        float top_p = top_p_opt.has_value() ? (float)top_p_opt.value() : 0.0f;
+        float beam_search_diversity_rate =
             beam_search_diversity_rate_opt.has_value() ? (float)beam_search_diversity_rate_opt.value() : 0.0f;
-        float temperature        = temperature_opt.has_value() ? (float)temperature_opt.value() : 1.0f;
-        float len_penalty        = len_penalty_opt.has_value() ? (float)len_penalty_opt.value() : 0.0f;
+        float temperature = temperature_opt.has_value() ? (float)temperature_opt.value() : 1.0f;
+        float len_penalty = len_penalty_opt.has_value() ? (float)len_penalty_opt.value() : 0.0f;
         float repetition_penalty = repetition_penalty_opt.has_value() ? (float)repetition_penalty_opt.value() : 1.0f;
         unsigned long long random_seed = random_seed_opt.has_value() ? (unsigned long long)random_seed_opt.value() : 0;
-        bool               is_return_output_log_probs =
+        bool is_return_output_log_probs =
             is_return_output_log_probs_opt.has_value() ? (bool)is_return_output_log_probs_opt.value() : false;
         bool is_return_cum_log_probs =
             is_return_cum_log_probs_opt.has_value() ? (bool)is_return_cum_log_probs_opt.value() : false;
         bool is_return_cross_attentions =
             is_return_cross_attentions_opt.has_value() ? (bool)is_return_cross_attentions_opt.value() : false;
 
-        auto           stream       = at::cuda::getCurrentCUDAStream().stream();
+        auto stream = at::cuda::getCurrentCUDAStream().stream();
         cublasHandle_t cublasHandle = at::cuda::getCurrentCUDABlasHandle();
         cublasSetStream(cublasHandle, stream);
-        ft::Allocator<ft::AllocatorType::TH> allocator      = ft::Allocator<ft::AllocatorType::TH>();
-        ft::cublasMMWrapper                  cublas_wrapper = ft::cublasMMWrapper(
+        ft::Allocator<ft::AllocatorType::TH> allocator = ft::Allocator<ft::AllocatorType::TH>();
+        ft::cublasMMWrapper cublas_wrapper = ft::cublasMMWrapper(
             cublasHandle, cublasltHandle_, stream, cublas_algo_map_, cublas_wrapper_mutex_, &allocator);
 
         if (std::is_same<T, half>::value) {
@@ -246,40 +247,40 @@ public:
             cublas_wrapper.setFP32GemmConfig();
         }
 
-        const size_t batch_size      = (size_t)memory.size(0);
+        const size_t batch_size = (size_t)memory.size(0);
         const size_t mem_max_seq_len = (size_t)memory.size(1);
 
-        ft::WhisperDecoding<T> decoding  = ft::WhisperDecoding<T>(batch_size,
-                                                           max_seq_len,
-                                                           mem_max_seq_len,
-                                                           beam_width,
-                                                           head_num_,
-                                                           size_per_head_,
-                                                           inter_size_,
-                                                           d_model_,
-                                                           layer_num_,
-                                                           vocab_size_,
-                                                           num_bucket_,
-                                                           max_distance_,
-                                                           q_scaling_,
-                                                           start_id_,
-                                                           end_id_,
-                                                           beam_search_diversity_rate,
-                                                           top_k,
-                                                           top_p,
-                                                           temperature,
-                                                           len_penalty,
-                                                           repetition_penalty,
-                                                           stream,
-                                                           &cublas_wrapper,
-                                                           &allocator,
-                                                           false,
-                                                           &prop_,
-                                                           tensor_para_,
-                                                           pipeline_para_,
-                                                           activation_type_,
-                                                           layernorm_type_);
-        ft::DataType        data_type = ft::getTensorType<T>();
+        ft::WhisperDecoding<T> decoding = ft::WhisperDecoding<T>(batch_size,
+                                                                 max_seq_len,
+                                                                 mem_max_seq_len,
+                                                                 beam_width,
+                                                                 head_num_,
+                                                                 size_per_head_,
+                                                                 inter_size_,
+                                                                 d_model_,
+                                                                 layer_num_,
+                                                                 vocab_size_,
+                                                                 num_bucket_,
+                                                                 max_distance_,
+                                                                 q_scaling_,
+                                                                 start_id_,
+                                                                 end_id_,
+                                                                 beam_search_diversity_rate,
+                                                                 top_k,
+                                                                 top_p,
+                                                                 temperature,
+                                                                 len_penalty,
+                                                                 repetition_penalty,
+                                                                 stream,
+                                                                 &cublas_wrapper,
+                                                                 &allocator,
+                                                                 false,
+                                                                 &prop_,
+                                                                 tensor_para_,
+                                                                 pipeline_para_,
+                                                                 activation_type_,
+                                                                 layernorm_type_);
+        ft::DataType data_type = ft::getTensorType<T>();
 
         ft::TensorMap input_tensors(
             {{"encoder_output",
@@ -324,9 +325,9 @@ public:
                 {"random_seed", ft::Tensor{ft::MEMORY_CPU, ft::TYPE_UINT64, std::vector<size_t>{1}, &random_seed}});
         }
 
-        auto                    output_ids        = torch::empty({(long int)(batch_size * beam_width * max_seq_len)},
+        auto output_ids = torch::empty({(long int)(batch_size * beam_width * max_seq_len)},
                                        torch::dtype(torch::kInt32).device(torch::kCUDA).requires_grad(false));
-        auto                    sequence_length   = torch::empty({(long int)(batch_size * beam_width)},
+        auto sequence_length = torch::empty({(long int)(batch_size * beam_width)},
                                             torch::dtype(torch::kInt32).device(torch::kCUDA).requires_grad(false));
         std::vector<th::Tensor> th_output_tensors = {output_ids, sequence_length};
 
@@ -382,29 +383,29 @@ public:
     }
 
 private:
-    const int64_t                   head_num_;
-    const int64_t                   size_per_head_;
-    const int64_t                   inter_size_;
-    const int64_t                   mem_d_model_;
-    const int64_t                   d_model_;
-    const int64_t                   layer_num_;
-    const int64_t                   vocab_size_;
-    const int64_t                   num_bucket_;
-    const int64_t                   max_distance_;
-    double                          q_scaling_;
-    const int64_t                   start_id_;
-    const int64_t                   end_id_;
-    const bool                      whisper_with_bias_;
-    const bool                      mwhisper_;
+    const int64_t head_num_;
+    const int64_t size_per_head_;
+    const int64_t inter_size_;
+    const int64_t mem_d_model_;
+    const int64_t d_model_;
+    const int64_t layer_num_;
+    const int64_t vocab_size_;
+    const int64_t num_bucket_;
+    const int64_t max_distance_;
+    double q_scaling_;
+    const int64_t start_id_;
+    const int64_t end_id_;
+    const bool whisper_with_bias_;
+    const bool mwhisper_;
     const ft::PositionEmbeddingType position_embedding_type_;
-    const ft::ActivationType        activation_type_;
-    const ft::LayerNormType         layernorm_type_;
+    const ft::ActivationType activation_type_;
+    const ft::LayerNormType layernorm_type_;
 
-    std::vector<th::Tensor>   _weights;
-    cublasLtHandle_t          cublasltHandle_;
-    std::mutex*               cublas_wrapper_mutex_;
-    ft::cublasAlgoMap*        cublas_algo_map_;
-    struct cudaDeviceProp     prop_;
+    std::vector<th::Tensor> _weights;
+    cublasLtHandle_t cublasltHandle_;
+    std::mutex* cublas_wrapper_mutex_;
+    ft::cublasAlgoMap* cublas_algo_map_;
+    struct cudaDeviceProp prop_;
     ft::WhisperDecodingWeight<T> decoding_weights;
 
     ft::NcclParam tensor_para_;
@@ -414,82 +415,82 @@ private:
 class FasterTransformerWhisperDecoding: public torch::jit::CustomClassHolder {
 public:
     FasterTransformerWhisperDecoding(
-        int64_t     head_num,
-        int64_t     size_per_head,
-        int64_t     inter_size,
-        int64_t     mem_d_model,
-        int64_t     d_model,
-        int64_t     layer_num,
-        int64_t     vocab_size,
-        int64_t     num_bucket,
-        int64_t     max_distance,
-        double      q_scaling,
-        int64_t     start_id,
-        int64_t     end_id,
-        int64_t     tensor_para_size,
-        int64_t     pipeline_para_size,
-        bool        whisper_with_bias,
-        bool        mwhisper,
-        int64_t     position_embedding_type,
+        int64_t head_num,
+        int64_t size_per_head,
+        int64_t inter_size,
+        int64_t mem_d_model,
+        int64_t d_model,
+        int64_t layer_num,
+        int64_t vocab_size,
+        int64_t num_bucket,
+        int64_t max_distance,
+        double q_scaling,
+        int64_t start_id,
+        int64_t end_id,
+        int64_t tensor_para_size,
+        int64_t pipeline_para_size,
+        bool whisper_with_bias,
+        bool mwhisper,
+        int64_t position_embedding_type,
         std::string activaiton_type,
         std::string layernorm_type,
-        th::Tensor  self_layernorm_gamma,  // [0] see layer-level weights already documented in WhisperDecoderOp.h
-        th::Tensor  self_kernel_qkv,
-        th::Tensor  self_output_kernel,
-        th::Tensor  cross_layernorm_gamma,
-        th::Tensor  cross_kernel_q,
-        th::Tensor  cross_kernel_k,
-        th::Tensor  cross_kernel_v,
-        th::Tensor  cross_output_kernel,
-        th::Tensor  layernorm_gamma,
-        th::Tensor  inter_kernel,
-        th::Tensor  inter_kernel2,
-        th::Tensor  output_kernel,                            // [11]
-        th::Tensor  absolute_or_relative_position_embedding,  // [12] Block: APE/RPE
-        th::Tensor  embedding_table,                          // [13] Block: embedding table
-        th::Tensor  lm_head,                    // [14] Block: LM head weight (i.e. post decoder embedding table)
-        th::Tensor  embedding_layernorm_gamma,  // [15] Block: pre-decoder embedding LN weight
-        th::Tensor  final_layernorm_gamma,      // [16] Block: final LN weight (optional, mBART only)
-        th::Tensor  self_layernorm_beta,        // [17]
-        th::Tensor  self_bias_qkv,
-        th::Tensor  self_output_bias,
-        th::Tensor  cross_layernorm_beta,
-        th::Tensor  cross_bias_q,
-        th::Tensor  cross_bias_k,
-        th::Tensor  cross_bias_v,
-        th::Tensor  cross_output_bias,
-        th::Tensor  layernorm_beta,
-        th::Tensor  inter_bias,
-        th::Tensor  inter_bias2,
-        th::Tensor  output_bias,
-        th::Tensor  embedding_layernorm_beta,  // [29]
-        th::Tensor  final_layernorm_beta,      // [30]
-        th::Tensor  embedding_bias             // [31]
+        th::Tensor self_layernorm_gamma,  // [0] see layer-level weights already documented in WhisperDecoderOp.h
+        th::Tensor self_kernel_qkv,
+        th::Tensor self_output_kernel,
+        th::Tensor cross_layernorm_gamma,
+        th::Tensor cross_kernel_q,
+        th::Tensor cross_kernel_k,
+        th::Tensor cross_kernel_v,
+        th::Tensor cross_output_kernel,
+        th::Tensor layernorm_gamma,
+        th::Tensor inter_kernel,
+        th::Tensor inter_kernel2,
+        th::Tensor output_kernel,                            // [11]
+        th::Tensor absolute_or_relative_position_embedding,  // [12] Block: APE/RPE
+        th::Tensor embedding_table,                          // [13] Block: embedding table
+        th::Tensor lm_head,                    // [14] Block: LM head weight (i.e. post decoder embedding table)
+        th::Tensor embedding_layernorm_gamma,  // [15] Block: pre-decoder embedding LN weight
+        th::Tensor final_layernorm_gamma,      // [16] Block: final LN weight (optional, mBART only)
+        th::Tensor self_layernorm_beta,        // [17]
+        th::Tensor self_bias_qkv,
+        th::Tensor self_output_bias,
+        th::Tensor cross_layernorm_beta,
+        th::Tensor cross_bias_q,
+        th::Tensor cross_bias_k,
+        th::Tensor cross_bias_v,
+        th::Tensor cross_output_bias,
+        th::Tensor layernorm_beta,
+        th::Tensor inter_bias,
+        th::Tensor inter_bias2,
+        th::Tensor output_bias,
+        th::Tensor embedding_layernorm_beta,  // [29]
+        th::Tensor final_layernorm_beta,      // [30]
+        th::Tensor embedding_bias             // [31]
     );
 
     ~FasterTransformerWhisperDecoding();
 
     std::vector<th::Tensor> forward(th::optional<int64_t> beam_width,
-                                    int64_t               max_seq_len,
+                                    int64_t max_seq_len,
                                     th::optional<int64_t> top_k,
-                                    th::optional<double>  top_p,
-                                    th::optional<double>  beam_search_diversity_rate,
-                                    th::optional<double>  temperature,
-                                    th::optional<double>  len_penalty,
-                                    th::optional<double>  repetition_penalty,
+                                    th::optional<double> top_p,
+                                    th::optional<double> beam_search_diversity_rate,
+                                    th::optional<double> temperature,
+                                    th::optional<double> len_penalty,
+                                    th::optional<double> repetition_penalty,
                                     th::optional<int64_t> random_seed,
-                                    th::optional<bool>    is_return_output_log_probs,
-                                    th::optional<bool>    is_return_cum_log_probs,
-                                    th::optional<bool>    is_return_cross_attentions,
-                                    th::Tensor            memory,
-                                    th::Tensor            memory_seq_lens);
+                                    th::optional<bool> is_return_output_log_probs,
+                                    th::optional<bool> is_return_cum_log_probs,
+                                    th::optional<bool> is_return_cross_attentions,
+                                    th::Tensor memory,
+                                    th::Tensor memory_seq_lens);
 
     std::vector<th::Tensor> get_pickle_info() const;
 
 private:
-    const at::ScalarType        _st;
+    const at::ScalarType _st;
     torch_ext::IFTWhisperDecoding* ftdecoding;
-    std::vector<th::Tensor>     weights;
+    std::vector<th::Tensor> weights;
 };
 
 }  // namespace torch_ext
