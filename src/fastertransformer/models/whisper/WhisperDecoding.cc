@@ -20,6 +20,8 @@
 #include "src/fastertransformer/kernels/gpt_kernels.h"
 #include "src/fastertransformer/layers/beam_search_layers/BaseBeamSearchLayer.h"
 
+
+
 namespace fastertransformer {
 
 template<typename T>
@@ -721,7 +723,11 @@ void WhisperDecoding<T>::forward(TensorMap* output_tensors,
                      {"ite", Tensor{MEMORY_CPU, TYPE_UINT32, {1}, &ite}},
                      {"end_id", Tensor{MEMORY_GPU, TYPE_INT32, {batch_size}, end_ids_buf_}},
                      {"local_batch_size", Tensor{MEMORY_CPU, TYPE_INT32, {1}, &tmp_local_batch_size}},
-                     {"is_initialize_random_table", Tensor{MEMORY_CPU, TYPE_BOOL, {1}, &is_initialize_random_table}}});
+                     {"is_initialize_random_table", Tensor{MEMORY_CPU, TYPE_BOOL, {1}, &is_initialize_random_table}},
+                     {"bad_words_list", input_tensors->at("bad_words_list")}
+                     });
+                     
+                // print_abs_mean(input_tensors->at("bad_words_list").data, input_tensors->at("bad_words_list").size(), stream_, "bad_words_list");
 
                 if (cache_indirections_[src_indir_idx] != nullptr) {
                     dynamic_decode_input_tensors.insert(

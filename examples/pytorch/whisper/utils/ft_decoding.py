@@ -322,12 +322,14 @@ class FTWhisperDecoding(nn.Module):
                                         is_return_output_log_probs, is_return_cum_log_probs, is_return_cross_attentions)
         return results
 
-
+bad_words_ids = [[1,2,7,8,9,10,14,25,26,27,28,29,31,58,59,60,61,62,63,90,91,92,93,359,503,522,542,873,893,902,918,922,931,1350,1853,1982,2460,2627,3246,3253,3268,3536,3846,3961,4183,4667,6585,6647,7273,9061,9383,10428,10929,11938,12033,12331,12562,13793,14157,14635,15265,15618,16553,16604,18362,18956,20075,21675,22520,26130,26161,26435,28279,29464,31650,32302,32470,36865,42863,47425,49870,50254,50258,50360,50361,50362],
+    [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]]
 class FTWhisper(nn.Module):
     def __init__(self, encoder, decoding):
         super().__init__()
         self.encoder = encoder
         self.decoding = decoding
+        self.bad_words_list = torch.tensor(bad_words_ids, dtype=torch.int32).to("cuda")
 
     def forward(self, input_ids, attention_mask, inputs_embeds, beam_size, max_seq_len,
                 top_k, top_p, beam_search_diversity_rate,
@@ -343,7 +345,7 @@ class FTWhisper(nn.Module):
         else:
             mem_seq_len = torch.tensor([encoder_outputs.shape[1]]*encoder_outputs.shape[0]).type(torch.int32).to("cuda")
             ft_encoder_outputs = encoder_outputs
-        results = self.decoding.forward(beam_size,  # optional, can be None
+        results = self.decoding.forward2(beam_size,  # optional, can be None
                                         max_seq_len,
                                         top_k,  # optional, can be None
                                         top_p,  # optional, can be None
@@ -357,6 +359,7 @@ class FTWhisper(nn.Module):
                                         is_return_cross_attentions,  # optional, can be None
                                         ft_encoder_outputs,
                                         mem_seq_len,
+                                        self.bad_words_list
                                         )
         return_dict = {}
         return_dict['output_ids'] = results.pop(0).reshape([-1, beam_size, max_seq_len]).cpu()

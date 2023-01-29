@@ -260,6 +260,47 @@ std::vector<th::Tensor> FasterTransformerWhisperDecoding::forward(th::optional<i
     return results;
 }
 
+std::vector<th::Tensor> FasterTransformerWhisperDecoding::forward2(th::optional<int64_t> beam_width,
+                                                               int64_t               max_seq_len,
+                                                               th::optional<int64_t> top_k,
+                                                               th::optional<double>  top_p,
+                                                               th::optional<double>  beam_search_diversity_rate,
+                                                               th::optional<double>  temperature,
+                                                               th::optional<double>  len_penalty,
+                                                               th::optional<double>  repetition_penalty,
+                                                               th::optional<int64_t> random_seed,
+                                                               th::optional<bool>    is_return_output_log_probs,
+                                                               th::optional<bool>    is_return_cum_log_probs,
+                                                               th::optional<bool>    is_return_cross_attentions,
+                                                               th::Tensor            memory,
+                                                               th::Tensor            memory_seq_lens,
+                                                               th::Tensor bad_words_list)
+{
+    CHECK_INPUT(memory, _st);
+    CHECK_TH_CUDA(memory_seq_lens);
+    CHECK_CONTIGUOUS(memory_seq_lens);
+    TORCH_CHECK(memory_seq_lens.dtype() == torch::kInt32, "mem_seq_lens dtype should be int32");
+
+    auto results = ftdecoding->forward2(beam_width,
+                                       (size_t)max_seq_len,
+                                       top_k,
+                                       top_p,
+                                       beam_search_diversity_rate,
+                                       temperature,
+                                       len_penalty,
+                                       repetition_penalty,
+                                       random_seed,
+                                       is_return_output_log_probs,
+                                       is_return_cum_log_probs,
+                                       is_return_cross_attentions,
+                                       memory,
+                                       memory_seq_lens,
+                                       bad_words_list);
+    return results;
+}
+
+
+
 std::vector<th::Tensor> FasterTransformerWhisperDecoding::get_pickle_info() const
 {
     std::vector<th::Tensor> tmp(weights);
@@ -325,4 +366,5 @@ static auto fasterTransformerWhisperDecodingTHS =
                               th::Tensor,
                               th::Tensor,
                               th::Tensor>())
-        .def("forward", &torch_ext::FasterTransformerWhisperDecoding::forward);
+        .def("forward", &torch_ext::FasterTransformerWhisperDecoding::forward)
+        .def("forward2", &torch_ext::FasterTransformerWhisperDecoding::forward2);

@@ -40,6 +40,21 @@ public:
                                             th::optional<bool> is_return_cross_attentions_opt,
                                             th::Tensor memory,
                                             th::Tensor memory_seq_lens) = 0;
+    virtual std::vector<th::Tensor> forward2(th::optional<int64_t> beam_width_opt,
+                                            size_t max_seq_len,
+                                            th::optional<int64_t> top_k_opt,
+                                            th::optional<double> top_p_opt,
+                                            th::optional<double> beam_search_diversity_rate_opt,
+                                            th::optional<double> temperature_opt,
+                                            th::optional<double> len_penalty_opt,
+                                            th::optional<double> repetition_penalty_opt,
+                                            th::optional<int64_t> random_seed_opt,
+                                            th::optional<bool> is_return_output_log_probs_opt,
+                                            th::optional<bool> is_return_cum_log_probs_opt,
+                                            th::optional<bool> is_return_cross_attentions_opt,
+                                            th::Tensor memory,
+                                            th::Tensor memory_seq_lens,
+                                            th::Tensor bad_words_list) = 0;
 };
 
 template<typename T>
@@ -95,6 +110,15 @@ public:
         decoding_weights.setWhisperStructureDiff(
             whisper_with_bias, mwhisper, use_gated_activation, position_embedding_type);
         const int hidden_dim = head_num_ * size_per_head_;
+
+        // d_bad_words = nullptr;
+        // ft::read_word_list("/workspace/FasterTransformer/src/fastertransformer/models/whisper/bad_words.csv", bad_words);
+        // ft::deviceMalloc(&d_bad_words, bad_words.size(), false);
+        
+        // ft::cudaH2Dcpy(d_bad_words, bad_words.data(), bad_words.size());
+        
+        // int* d_bad_words_cpu = (int*)malloc(bad_words.size() * sizeof(int));
+        // ft::cudaD2Hcpy(d_bad_words_cpu, d_bad_words, bad_words.size());
 
         // Attention Layer-level weights
         for (int i = 0; i < layer_num_; ++i) {
@@ -325,6 +349,204 @@ public:
                 {"random_seed", ft::Tensor{ft::MEMORY_CPU, ft::TYPE_UINT64, std::vector<size_t>{1}, &random_seed}});
         }
 
+
+        auto output_ids = torch::empty({(long int)(batch_size * beam_width * max_seq_len)},
+                                       torch::dtype(torch::kInt32).device(torch::kCUDA).requires_grad(false));
+        auto sequence_length = torch::empty({(long int)(batch_size * beam_width)},
+                                            torch::dtype(torch::kInt32).device(torch::kCUDA).requires_grad(false));
+        std::vector<th::Tensor> th_output_tensors = {output_ids, sequence_length};
+
+        ft::TensorMap output_tensors({{"output_ids",
+                                       ft::Tensor{ft::MEMORY_GPU,
+                                                  ft::TYPE_INT32,
+                                                  std::vector<size_t>{batch_size, beam_width, max_seq_len},
+                                                  get_ptr<int>(output_ids)}},
+                                      {"sequence_length",
+                                       ft::Tensor{ft::MEMORY_GPU,
+                                                  ft::TYPE_INT32,
+                                                  std::vector<size_t>{batch_size, beam_width},
+                                                  get_ptr<int>(sequence_length)}}});
+
+        if (is_return_output_log_probs) {
+            auto output_log_probs = torch::empty({(long int)(batch_size * beam_width * max_seq_len)},
+                                                 torch::dtype(torch::kFloat).device(torch::kCUDA).requires_grad(false));
+            output_tensors.insert({"output_log_probs",
+                                   ft::Tensor{ft::MEMORY_GPU,
+                                              ft::TYPE_FP32,
+                                              {batch_size, beam_width, max_seq_len},
+                                              get_ptr<float>(output_log_probs)}});
+            th_output_tensors.push_back(output_log_probs);
+        }
+        if (is_return_cum_log_probs) {
+            auto cum_log_probs = torch::empty({(long int)(batch_size * beam_width)},
+                                              torch::dtype(torch::kFloat).device(torch::kCUDA).requires_grad(false));
+            output_tensors.insert(
+                {"cum_log_probs",
+                 ft::Tensor{ft::MEMORY_GPU, ft::TYPE_FP32, {batch_size, beam_width}, get_ptr<float>(cum_log_probs)}});
+            th_output_tensors.push_back(cum_log_probs);
+        }
+        if (is_return_cross_attentions) {
+            auto cross_attentions =
+                torch::empty({(long int)(ceil(layer_num_ * 1.0 / pipeline_para_.world_size_) * batch_size * beam_width
+                                         * (head_num_ / tensor_para_.world_size_) * max_seq_len * mem_max_seq_len)},
+                             torch::dtype(torch::kFloat).device(torch::kCUDA).requires_grad(false));
+            output_tensors.insert({"cross_attentions",
+                                   ft::Tensor{ft::MEMORY_GPU,
+                                              ft::TYPE_FP32,
+                                              {(size_t)(layer_num_ / pipeline_para_.world_size_),
+                                               (size_t)batch_size,
+                                               (size_t)beam_width,
+                                               (size_t)(head_num_ / tensor_para_.world_size_),
+                                               (size_t)max_seq_len,
+                                               (size_t)mem_max_seq_len},
+                                              get_ptr<float>(cross_attentions)}});
+            th_output_tensors.push_back(cross_attentions);
+        }
+
+        decoding.forward(&output_tensors, &input_tensors, &decoding_weights);
+        return th_output_tensors;
+    }
+
+    std::vector<th::Tensor> forward2(th::optional<int64_t> beam_width_opt,
+                                    size_t max_seq_len,
+                                    th::optional<int64_t> top_k_opt,
+                                    th::optional<double> top_p_opt,
+                                    th::optional<double> beam_search_diversity_rate_opt,
+                                    th::optional<double> temperature_opt,
+                                    th::optional<double> len_penalty_opt,
+                                    th::optional<double> repetition_penalty_opt,
+                                    th::optional<int64_t> random_seed_opt,
+                                    th::optional<bool> is_return_output_log_probs_opt,
+                                    th::optional<bool> is_return_cum_log_probs_opt,
+                                    th::optional<bool> is_return_cross_attentions_opt,
+                                    th::Tensor memory,
+                                    th::Tensor memory_seq_lens,
+                                    th::Tensor bad_words_list) override
+    {
+        // input validation
+        size_t beam_width = beam_width_opt.has_value() ? (size_t)beam_width_opt.value() : 1;
+        uint top_k = top_k_opt.has_value() ? (uint)top_k_opt.value() : 1;
+        float top_p = top_p_opt.has_value() ? (float)top_p_opt.value() : 0.0f;
+        float beam_search_diversity_rate =
+            beam_search_diversity_rate_opt.has_value() ? (float)beam_search_diversity_rate_opt.value() : 0.0f;
+        float temperature = temperature_opt.has_value() ? (float)temperature_opt.value() : 1.0f;
+        float len_penalty = len_penalty_opt.has_value() ? (float)len_penalty_opt.value() : 0.0f;
+        float repetition_penalty = repetition_penalty_opt.has_value() ? (float)repetition_penalty_opt.value() : 1.0f;
+        unsigned long long random_seed = random_seed_opt.has_value() ? (unsigned long long)random_seed_opt.value() : 0;
+        bool is_return_output_log_probs =
+            is_return_output_log_probs_opt.has_value() ? (bool)is_return_output_log_probs_opt.value() : false;
+        bool is_return_cum_log_probs =
+            is_return_cum_log_probs_opt.has_value() ? (bool)is_return_cum_log_probs_opt.value() : false;
+        bool is_return_cross_attentions =
+            is_return_cross_attentions_opt.has_value() ? (bool)is_return_cross_attentions_opt.value() : false;
+
+        auto stream = at::cuda::getCurrentCUDAStream().stream();
+        cublasHandle_t cublasHandle = at::cuda::getCurrentCUDABlasHandle();
+        cublasSetStream(cublasHandle, stream);
+        ft::Allocator<ft::AllocatorType::TH> allocator = ft::Allocator<ft::AllocatorType::TH>();
+        ft::cublasMMWrapper cublas_wrapper = ft::cublasMMWrapper(
+            cublasHandle, cublasltHandle_, stream, cublas_algo_map_, cublas_wrapper_mutex_, &allocator);
+
+        if (std::is_same<T, half>::value) {
+            cublas_wrapper.setFP16GemmConfig();
+        }
+#ifdef ENABLE_BF16
+        else if (std::is_same<T, __nv_bfloat16>::value) {
+            cublas_wrapper.setBF16GemmConfig();
+        }
+#endif
+        else if (std::is_same<T, float>::value) {
+            cublas_wrapper.setFP32GemmConfig();
+        }
+
+        const size_t batch_size = (size_t)memory.size(0);
+        const size_t mem_max_seq_len = (size_t)memory.size(1);
+
+        ft::WhisperDecoding<T> decoding = ft::WhisperDecoding<T>(batch_size,
+                                                                 max_seq_len,
+                                                                 mem_max_seq_len,
+                                                                 beam_width,
+                                                                 head_num_,
+                                                                 size_per_head_,
+                                                                 inter_size_,
+                                                                 d_model_,
+                                                                 layer_num_,
+                                                                 vocab_size_,
+                                                                 num_bucket_,
+                                                                 max_distance_,
+                                                                 q_scaling_,
+                                                                 start_id_,
+                                                                 end_id_,
+                                                                 beam_search_diversity_rate,
+                                                                 top_k,
+                                                                 top_p,
+                                                                 temperature,
+                                                                 len_penalty,
+                                                                 repetition_penalty,
+                                                                 stream,
+                                                                 &cublas_wrapper,
+                                                                 &allocator,
+                                                                 false,
+                                                                 &prop_,
+                                                                 tensor_para_,
+                                                                 pipeline_para_,
+                                                                 activation_type_,
+                                                                 layernorm_type_);
+        ft::DataType data_type = ft::getTensorType<T>();
+
+        ft::TensorMap input_tensors(
+            {{"encoder_output",
+              ft::Tensor{ft::MEMORY_GPU,
+                         data_type,
+                         std::vector<size_t>{(size_t)memory.size(0), (size_t)memory.size(1), (size_t)memory.size(2)},
+                         get_ptr<T>(memory)}},
+             {"encoder_sequence_length",
+              ft::Tensor{ft::MEMORY_GPU,
+                         ft::TYPE_INT32,
+                         std::vector<size_t>{(size_t)memory_seq_lens.size(0)},
+                         get_ptr<T>(memory_seq_lens)}},
+             {"bad_words_list", 
+              ft::Tensor{ft::MEMORY_GPU, 
+                        ft::TYPE_INT32, 
+                        std::vector<size_t>{(size_t)bad_words_list.size(0), (size_t)bad_words_list.size(1)}, 
+                        get_ptr<T>(bad_words_list)}}});
+
+        ft::Tensor bad_words = input_tensors.at("bad_words_list");
+        auto* bad_words_data = input_tensors.at("bad_words_list").data;
+        
+
+        if (beam_width > 1) {
+            input_tensors.insert(
+                {"beam_search_diversity_rate",
+                 ft::Tensor{ft::MEMORY_CPU, ft::TYPE_FP32, std::vector<size_t>{1}, &beam_search_diversity_rate}});
+        }
+        if (top_p_opt.has_value()) {
+            input_tensors.insert(
+                {"runtime_top_p", ft::Tensor{ft::MEMORY_CPU, ft::TYPE_FP32, std::vector<size_t>{1}, &top_p}});
+        }
+        if (top_k_opt.has_value()) {
+            input_tensors.insert(
+                {"runtime_top_k", ft::Tensor{ft::MEMORY_CPU, ft::TYPE_UINT32, std::vector<size_t>{1}, &top_k}});
+        }
+        if (temperature_opt.has_value()) {
+            input_tensors.insert(
+                {"temperature", ft::Tensor{ft::MEMORY_CPU, ft::TYPE_FP32, std::vector<size_t>{1}, &temperature}});
+        }
+        if (len_penalty_opt.has_value()) {
+            input_tensors.insert(
+                {"len_penalty", ft::Tensor{ft::MEMORY_CPU, ft::TYPE_FP32, std::vector<size_t>{1}, &len_penalty}});
+        }
+        if (repetition_penalty_opt.has_value()) {
+            input_tensors.insert(
+                {"repetition_penalty",
+                 ft::Tensor{ft::MEMORY_CPU, ft::TYPE_FP32, std::vector<size_t>{1}, &repetition_penalty}});
+        }
+        if (random_seed_opt.has_value()) {
+            input_tensors.insert(
+                {"random_seed", ft::Tensor{ft::MEMORY_CPU, ft::TYPE_UINT64, std::vector<size_t>{1}, &random_seed}});
+        }
+
+
         auto output_ids = torch::empty({(long int)(batch_size * beam_width * max_seq_len)},
                                        torch::dtype(torch::kInt32).device(torch::kCUDA).requires_grad(false));
         auto sequence_length = torch::empty({(long int)(batch_size * beam_width)},
@@ -395,6 +617,8 @@ private:
     double q_scaling_;
     const int64_t start_id_;
     const int64_t end_id_;
+    // std::vector<int> bad_words;
+    // int* d_bad_words;
     const bool whisper_with_bias_;
     const bool mwhisper_;
     const ft::PositionEmbeddingType position_embedding_type_;
@@ -484,6 +708,22 @@ public:
                                     th::optional<bool> is_return_cross_attentions,
                                     th::Tensor memory,
                                     th::Tensor memory_seq_lens);
+
+    std::vector<th::Tensor> forward2(th::optional<int64_t> beam_width,
+                                    int64_t max_seq_len,
+                                    th::optional<int64_t> top_k,
+                                    th::optional<double> top_p,
+                                    th::optional<double> beam_search_diversity_rate,
+                                    th::optional<double> temperature,
+                                    th::optional<double> len_penalty,
+                                    th::optional<double> repetition_penalty,
+                                    th::optional<int64_t> random_seed,
+                                    th::optional<bool> is_return_output_log_probs,
+                                    th::optional<bool> is_return_cum_log_probs,
+                                    th::optional<bool> is_return_cross_attentions,
+                                    th::Tensor memory,
+                                    th::Tensor memory_seq_lens,
+                                    th::Tensor bad_words_list);                                
 
     std::vector<th::Tensor> get_pickle_info() const;
 
