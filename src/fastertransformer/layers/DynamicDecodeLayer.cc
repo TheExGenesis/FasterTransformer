@@ -242,6 +242,9 @@ void DynamicDecodeLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_
     if (input_tensors->isExist("bad_words_list")) {
         const auto&  bad_words        = input_tensors->at("bad_words_list");
         const int*   bad_words_ptr    = bad_words.getPtr<const int>();
+        // print_abs_mean(bad_words_ptr, bad_words.shape[0] * bad_words.shape[1], stream_, "bad_words");
+        // std::cout << "step " << step;
+        // print_abs_mean(input_tensors->at("logits").getPtr<T>(), input_tensors->at("logits").shape[0] * input_tensors->at("logits").shape[1] * input_tensors->at("logits").shape[2], stream_, "logits");
         const bool   shared_bad_words = bad_words.shape.size() == 2;
         const size_t bad_words_len    = bad_words.shape[shared_bad_words ? 1 : 2];
 
@@ -263,6 +266,8 @@ void DynamicDecodeLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_
                           vocab_size_padded_,
                           step,
                           stream_);
+        // sync_check_cuda_error();
+        // print_abs_mean(input_tensors->at("logits").getPtr<T>(), input_tensors->at("logits").shape[0] * input_tensors->at("logits").shape[1] * input_tensors->at("logits").shape[2], stream_, "logits_after_bad_words");
     }
 
     // dynamic decode GPT
@@ -417,6 +422,9 @@ void DynamicDecodeLayer<T>::forward(TensorMap* output_tensors, TensorMap* input_
                                                                  step_offset + local_batch_offset)});
         }
 
+
+        // print_abs_mean(logits.getPtr<T>(), logits.shape[0] * logits.shape[1] * logits.shape[2], stream_, "logits_b4_sampling");
+        // print_to_screen(logits.getPtr<T>(), 20);
         // Run topk / topp decode layers.
         // Currently, we support batch sampling. If the runtime arguments are like
         // topk = [4, 0, 4]. topp = [0.0, 0.5, 0.5]
