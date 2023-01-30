@@ -277,14 +277,19 @@ class FTWhisperDecodingWeight(object):
         for i in range(self.real_weights_num):
             self.w[i] = self.w[i].bfloat16()
 
+bad_words_ids = [[1,2,7,8,9,10,14,25,26,27,28,29,31,58,59,60,61,62,63,90,91,92,93,359,503,522,542,873,893,902,918,922,931,1350,1853,1982,2460,2627,3246,3253,3268,3536,3846,3961,4183,4667,6585,6647,7273,9061,9383,10428,10929,11938,12033,12331,12562,13793,14157,14635,15265,15618,16553,16604,18362,18956,20075,21675,22520,26130,26161,26435,28279,29464,31650,32302,32470,36865,42863,47425,49870,50254,50258,50360,50361,50362],
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85]]
+
 class FTWhisperDecoding(nn.Module):
     def __init__(self, decoding_weight_list, lib_path, head_num, head_size, inter_size,
                  mem_d_model, d_model, num_layer, start_id, end_id, vocab_size, q_scaling=1.0, num_bucket=32,
                  max_distance=128, tensor_para_size=1, pipeline_para_size=1, whisper_with_bias=True, mwhisper=True, position_embedding_type=1,
-                 activation_type="gelu", layernorm_type="post_layernorm"):
+                 activation_type="gelu", layernorm_type="post_layernorm", bad_words_list=None):
         super().__init__()
 
+        self.end_id = end_id
         self.use_mpi = dist.is_mpi_available()
+        self.bad_words_list = torch.tensor(bad_words_ids, dtype=torch.int32).to("cuda") if bad_words_list is None else bad_words_list
 
         if self.use_mpi:
             try:
@@ -315,21 +320,19 @@ class FTWhisperDecoding(nn.Module):
                 is_return_output_log_probs, is_return_cum_log_probs, is_return_cross_attentions=False):
         # TODO (bhsueh) Not found an method to put a None Type into op forward function
         # So, the top_k and top_p must be some values now.
-        results = self.decoding.forward(beam_width, max_seq_len,
+        results = self.decoding.forward2(beam_width, max_seq_len,
                                         top_k, top_p, beam_search_diversity_rate,
                                         temperature, len_penalty, repetition_penalty,
                                         random_seed, mem_hidden_states, mem_seq_len,
-                                        is_return_output_log_probs, is_return_cum_log_probs, is_return_cross_attentions)
+                                        is_return_output_log_probs, is_return_cum_log_probs, is_return_cross_attentions, self.bad_words_list)
         return results
 
-bad_words_ids = [[1,2,7,8,9,10,14,25,26,27,28,29,31,58,59,60,61,62,63,90,91,92,93,359,503,522,542,873,893,902,918,922,931,1350,1853,1982,2460,2627,3246,3253,3268,3536,3846,3961,4183,4667,6585,6647,7273,9061,9383,10428,10929,11938,12033,12331,12562,13793,14157,14635,15265,15618,16553,16604,18362,18956,20075,21675,22520,26130,26161,26435,28279,29464,31650,32302,32470,36865,42863,47425,49870,50254,50258,50360,50361,50362],
-    [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1]]
+
 class FTWhisper(nn.Module):
     def __init__(self, encoder, decoding):
         super().__init__()
         self.encoder = encoder
         self.decoding = decoding
-        self.bad_words_list = torch.tensor(bad_words_ids, dtype=torch.int32).to("cuda")
 
     def forward(self, input_ids, attention_mask, inputs_embeds, beam_size, max_seq_len,
                 top_k, top_p, beam_search_diversity_rate,
@@ -345,7 +348,7 @@ class FTWhisper(nn.Module):
         else:
             mem_seq_len = torch.tensor([encoder_outputs.shape[1]]*encoder_outputs.shape[0]).type(torch.int32).to("cuda")
             ft_encoder_outputs = encoder_outputs
-        results = self.decoding.forward2(beam_size,  # optional, can be None
+        results = self.decoding.forward(beam_size,  # optional, can be None
                                         max_seq_len,
                                         top_k,  # optional, can be None
                                         top_p,  # optional, can be None
@@ -359,7 +362,6 @@ class FTWhisper(nn.Module):
                                         is_return_cross_attentions,  # optional, can be None
                                         ft_encoder_outputs,
                                         mem_seq_len,
-                                        self.bad_words_list
                                         )
         return_dict = {}
         return_dict['output_ids'] = results.pop(0).reshape([-1, beam_size, max_seq_len]).cpu()
@@ -370,5 +372,20 @@ class FTWhisper(nn.Module):
             return_dict['cum_log_probs'] = results.pop(0).cpu()
         if is_return_cross_attentions:
             return_dict['cross_attentions'] = results.pop(0).cpu()
-            
+
+        return_dict['output_ids'] = pad_ft_eos(return_dict['output_ids'], return_dict['sequence_lengths'], self.decoding.end_id)
         return return_dict
+
+def pad_ft_eos(output_ids, sequence_lengths, eos_token):
+    """
+    pad the output_ids[sequence_lengths:] with eos_token
+
+    items: tensor (batch_size, seq_len)
+
+    out: tensor (batch_size, seq_len)
+    """
+    batch_size, beam_size, seq_len = output_ids.shape
+    for i in range(batch_size):
+        for j in range(beam_size):
+            output_ids[i, j, sequence_lengths[i]:] = eos_token
+    return output_ids
